@@ -85,20 +85,26 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50/30 flex flex-col justify-center items-center p-4 relative">
+            {/* Subtle decorative elements */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-100/30 rounded-full blur-3xl" />
+                <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-100/20 rounded-full blur-3xl" />
+            </div>
+
             {/* Logo & Header */}
-            <div className="mb-8 flex flex-col items-center">
-                <div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center mb-5 shadow-md">
+            <div className="mb-8 flex flex-col items-center relative z-10">
+                <div className="w-14 h-14 bg-linear-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-blue-200/50">
                     <BookOpen className="text-white w-7 h-7" />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1.5 tracking-tight text-center">
-                    Final Year Project Management System
+                    Acad Nexus
                 </h1>
-                <p className="text-slate-500 text-sm">Sign in to your account</p>
+                <p className="text-slate-500 text-sm">Academic Project Management & Supervision Platform</p>
             </div>
 
             {/* Login Card */}
-            <Card className="w-full max-w-md shadow-lg border border-slate-100 bg-white rounded-xl">
+            <Card className="w-full max-w-md shadow-xl shadow-slate-200/50 border border-slate-100/80 bg-white/80 backdrop-blur-sm rounded-2xl relative z-10">
                 <CardContent className="p-6 sm:p-8">
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Error Message */}
@@ -173,7 +179,7 @@ export default function LoginPage() {
                         {/* Sign In Button */}
                         <Button
                             type="submit"
-                            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold h-11 rounded-lg text-sm shadow-sm transition-colors gap-2"
+                            className="w-full bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold h-11 rounded-xl text-sm shadow-md shadow-blue-200/50 transition-all gap-2"
                             disabled={isSubmitting}
                         >
                             {isSubmitting ? (
@@ -236,8 +242,8 @@ export default function LoginPage() {
             </Card>
 
             {/* Footer */}
-            <p className="text-xs text-slate-400 mt-6">
-                ACAD — Final Year Project Management System v1.0
+            <p className="text-xs text-slate-400 mt-6 relative z-10">
+                Acad Nexus — Academic Project Management Platform v1.0
             </p>
         </div>
     )

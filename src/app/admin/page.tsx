@@ -113,118 +113,102 @@ export default function AdminDashboard() {
         <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
 
             {/* Welcome Banner */}
-            <div className="bg-gradient-to-r from-violet-600 to-fuchsia-500 rounded-xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
+            <div className="bg-linear-to-br from-violet-600 via-purple-600 to-indigo-700 rounded-2xl p-6 md:p-8 text-white shadow-lg relative overflow-hidden">
                 <div className="relative z-10">
+                    <p className="text-violet-200 text-sm font-medium mb-1">Welcome back, Admin</p>
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">Admin Dashboard</h1>
-                    <p className="text-violet-100 max-w-xl">Manage the entire project management system and oversee all activities.</p>
+                    <p className="text-violet-200/80 max-w-xl text-sm">Manage the entire Acad Nexus platform — oversee students, teachers, projects, and deadlines.</p>
                 </div>
-                <div className="absolute right-0 top-0 opacity-10 pointer-events-none hidden md:block">
-                    <svg width="300" height="300" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                        <path fill="#ffffff" d="M47.7,-60.5C60.5,-51.7,68.9,-35.3,71.2,-19.1C73.6,-2.9,69.9,13.1,61.5,26.5C53.1,40,40,50.9,25.3,58.3C10.7,65.7,-5.4,69.5,-21.8,66.8C-38.2,64.1,-55,54.8,-65.7,40.6C-76.4,26.4,-81,7.2,-77.8,-11.1C-74.6,-29.4,-63.5,-46.8,-48.7,-55.8C-33.9,-64.8,-16.9,-65.4,0.3,-65.7C17.4,-66.1,34.9,-69.3,47.7,-60.5Z" transform="translate(100 100)" />
-                    </svg>
-                </div>
+                <div className="absolute -right-10 -top-10 w-60 h-60 bg-white/5 rounded-full blur-2xl" />
+                <div className="absolute -right-5 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-xl" />
             </div>
 
             {/* Top Metrics Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <Card className="shadow-sm border-slate-100 bg-blue-50/50">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
                     <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+                        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
                             <GraduationCap className="w-5 h-5" />
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground font-medium mb-0.5">Total Students</p>
-                            <h3 className="font-semibold text-xl">6</h3>
+                        <div className="min-w-0">
+                            <p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Students</p>
+                            <h3 className="font-bold text-xl text-slate-900">6</h3>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-slate-100 bg-emerald-50/50">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
                     <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg shrink-0">
+                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
                             <Users className="w-5 h-5" />
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground font-medium mb-0.5">Total Teachers</p>
-                            <h3 className="font-semibold text-xl">5</h3>
+                        <div className="min-w-0">
+                            <p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Teachers</p>
+                            <h3 className="font-bold text-xl text-slate-900">5</h3>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-slate-100 bg-amber-50/50">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
                     <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2 bg-amber-100 text-amber-600 rounded-lg shrink-0">
+                        <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl shrink-0">
                             <Clock className="w-5 h-5" />
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground font-medium mb-0.5">Pending Requests</p>
-                            <h3 className="font-semibold text-xl">2</h3>
+                        <div className="min-w-0">
+                            <p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Pending</p>
+                            <h3 className="font-bold text-xl text-slate-900">2</h3>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-slate-100 bg-yellow-50/50">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
                     <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg shrink-0">
+                        <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
                             <FileText className="w-5 h-5" />
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground font-medium mb-0.5">Active Projects</p>
-                            <h3 className="font-semibold text-xl">5</h3>
+                        <div className="min-w-0">
+                            <p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Projects</p>
+                            <h3 className="font-bold text-xl text-slate-900">5</h3>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-slate-100 bg-rose-50/50 col-span-2 lg:col-span-1">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white col-span-2 md:col-span-1">
                     <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2 bg-rose-100 text-rose-600 rounded-lg shrink-0">
+                        <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shrink-0">
                             <AlertCircle className="w-5 h-5" />
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground font-medium mb-0.5">Nearing Deadlines</p>
-                            <h3 className="font-semibold text-xl">0</h3>
+                        <div className="min-w-0">
+                            <p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Overdue</p>
+                            <h3 className="font-bold text-xl text-slate-900">0</h3>
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                 {/* Project Distribution Chart */}
-                <Card className="shadow-sm border-slate-100 lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Project Distribution by Supervisor</CardTitle>
+                <Card className="shadow-sm border-slate-100 lg:col-span-2 bg-white">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base font-semibold text-slate-800">Project Distribution by Supervisor</CardTitle>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <div className="h-[300px] w-full">
+                        <div className="h-70 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                                    <XAxis
-                                        dataKey="name"
-                                        stroke="#888888"
-                                        fontSize={12}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dy={10}
-                                    />
-                                    <YAxis
-                                        stroke="#888888"
-                                        fontSize={12}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        tickFormatter={(value) => `${value}`}
-                                        domain={[0, 4]}
-                                        ticks={[0, 1, 2, 3, 4]}
-                                    />
+                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} domain={[0, 4]} ticks={[0, 1, 2, 3, 4]} />
                                     <Tooltip
-                                        cursor={{ fill: 'rgba(0,0,0,0.05)' }}
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                                        contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(0 0 0 / 0.08)', fontSize: '13px' }}
                                     />
-                                    <Bar
-                                        dataKey="total"
-                                        fill="#0ea5e9"
-                                        radius={[4, 4, 0, 0]}
-                                        barSize={120}
-                                    />
+                                    <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={80} />
+                                    <defs>
+                                        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#6366f1" />
+                                            <stop offset="100%" stopColor="#818cf8" />
+                                        </linearGradient>
+                                    </defs>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -232,16 +216,16 @@ export default function AdminDashboard() {
                 </Card>
 
                 {/* Recent Activity */}
-                <Card className="shadow-sm border-slate-100">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Recent Activity</CardTitle>
+                <Card className="shadow-sm border-slate-100 bg-white">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold text-slate-800">Recent Activity</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-6">
+                        <div className="space-y-5">
 
                             <div className="flex gap-4 relative">
                                 <div className="mt-1.5 w-2 h-2 rounded-full bg-amber-400 shrink-0 relative z-10" />
-                                <div className="absolute left-1 top-3 bottom-[-24px] w-px bg-slate-100" />
+                                <div className="absolute left-1 top-3 -bottom-6 w-px bg-slate-100" />
                                 <div className="space-y-2">
                                     <p className="text-sm font-medium text-slate-700 leading-snug">
                                         <span className="font-semibold text-slate-900">Maryam Iqbal</span> has requested Prof. Sana Khan to be their supervisor.
@@ -255,7 +239,7 @@ export default function AdminDashboard() {
 
                             <div className="flex gap-4 relative">
                                 <div className="mt-1.5 w-2 h-2 rounded-full bg-amber-400 shrink-0 relative z-10" />
-                                <div className="absolute left-1 top-3 bottom-[-24px] w-px bg-slate-100" />
+                                <div className="absolute left-1 top-3 -bottom-6 w-px bg-slate-100" />
                                 <div className="space-y-2">
                                     <p className="text-sm font-medium text-slate-700 leading-snug">
                                         <span className="font-semibold text-slate-900">Hira Aslam</span> has requested Ms. Ayesha Malik to be their supervisor.
@@ -286,19 +270,19 @@ export default function AdminDashboard() {
             </div>
 
             {/* Quick Actions */}
-            <Card className="shadow-sm border-slate-100 mb-8">
-                <CardHeader className="pb-4">
-                    <CardTitle className="text-lg">Quick Actions</CardTitle>
+            <Card className="shadow-sm border-slate-100 mb-6 bg-white">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-semibold text-slate-800">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <Button onClick={() => setAddStudentOpen(true)} className="w-full h-12 bg-blue-500 hover:bg-blue-600 font-semibold gap-2 shadow-sm text-sm" size="lg">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <Button onClick={() => setAddStudentOpen(true)} className="w-full h-11 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-semibold gap-2 shadow-sm text-sm rounded-xl" size="lg">
                             <Plus className="w-4 h-4" /> Add Student
                         </Button>
-                        <Button onClick={() => setAddTeacherOpen(true)} className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 font-semibold gap-2 shadow-sm text-sm" size="lg">
+                        <Button onClick={() => setAddTeacherOpen(true)} className="w-full h-11 bg-linear-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-semibold gap-2 shadow-sm text-sm rounded-xl" size="lg">
                             <Plus className="w-4 h-4" /> Add Teacher
                         </Button>
-                        <Button onClick={() => { setReportsOpen(true); setFileSearch("") }} variant="outline" className="w-full h-12 font-semibold gap-2 text-blue-600 hover:text-blue-700 text-sm shadow-sm border-blue-200" size="lg">
+                        <Button onClick={() => { setReportsOpen(true); setFileSearch("") }} variant="outline" className="w-full h-11 font-semibold gap-2 text-indigo-600 hover:text-indigo-700 text-sm shadow-sm border-indigo-200 hover:bg-indigo-50 rounded-xl" size="lg">
                             <FileText className="w-4 h-4" /> View Reports
                         </Button>
                     </div>

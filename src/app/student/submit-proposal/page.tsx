@@ -23,25 +23,17 @@ import {
     Clock,
     Edit3,
     Trash2,
+    MessageSquare,
+    User,
 } from "lucide-react"
-
-// ─── Types ──────────────────────────────────────────────────────────
-type ProposalStatus = "none" | "pending" | "approved" | "rejected"
-
-interface Proposal {
-    id: number
-    title: string
-    description: string
-    status: ProposalStatus
-    submittedDate: string
-    feedback?: string
-}
+import { useProposals, type ProposalStatus } from "@/lib/proposal-context"
+import { useAuth } from "@/lib/auth-context"
 
 // ─── Helpers ────────────────────────────────────────────────────────
-function statusConfig(status: ProposalStatus) {
+function statusConfig(status: ProposalStatus | "none") {
     switch (status) {
         case "pending":
-            return { label: "Pending", color: "border-amber-300 bg-amber-50 text-amber-700", icon: Clock }
+            return { label: "Pending Review", color: "border-amber-300 bg-amber-50 text-amber-700", icon: Clock }
         case "approved":
             return { label: "Approved", color: "border-emerald-300 bg-emerald-50 text-emerald-700", icon: CheckCircle2 }
         case "rejected":
@@ -51,14 +43,31 @@ function statusConfig(status: ProposalStatus) {
     }
 }
 
+function remarkActionBadge(action?: string) {
+    switch (action) {
+        case "approved":
+            return <Badge variant="outline" className="text-[10px] border-emerald-300 bg-emerald-50 text-emerald-700">Approved</Badge>
+        case "rejected":
+            return <Badge variant="outline" className="text-[10px] border-red-300 bg-red-50 text-red-700">Rejected</Badge>
+        default:
+            return <Badge variant="outline" className="text-[10px] border-blue-300 bg-blue-50 text-blue-700">Feedback</Badge>
+    }
+}
+
 // ─── Page ───────────────────────────────────────────────────────────
 export default function SubmitProposalPage() {
+    const { user } = useAuth()
+    const { addProposal, getProposalsByStudent } = useProposals()
+
     const [title, setTitle] = React.useState("")
     const [description, setDescription] = React.useState("")
-    const [submittedProposal, setSubmittedProposal] = React.useState<Proposal | null>(null)
     const [confirmOpen, setConfirmOpen] = React.useState(false)
     const [successOpen, setSuccessOpen] = React.useState(false)
-    const [deleteOpen, setDeleteOpen] = React.useState(false)
+
+    const studentEmail = user?.email ?? ""
+    const studentName = user?.name ?? ""
+    const myProposals = getProposalsByStudent(studentEmail)
+    const latestProposal = myProposals.length > 0 ? myProposals[0] : null
 
     const canSubmit = title.trim().length > 0 && description.trim().length >= 20
 
@@ -68,34 +77,11 @@ export default function SubmitProposalPage() {
     }
 
     function handleConfirmSubmit() {
-        const newProposal: Proposal = {
-            id: Date.now(),
-            title: title.trim(),
-            description: description.trim(),
-            status: "pending",
-            submittedDate: new Date().toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-            }),
-        }
-        setSubmittedProposal(newProposal)
+        addProposal(title.trim(), description.trim(), studentName, studentEmail)
         setTitle("")
         setDescription("")
         setConfirmOpen(false)
         setSuccessOpen(true)
-    }
-
-    function handleDelete() {
-        setSubmittedProposal(null)
-        setDeleteOpen(false)
-    }
-
-    function handleEdit() {
-        if (!submittedProposal) return
-        setTitle(submittedProposal.title)
-        setDescription(submittedProposal.description)
-        setSubmittedProposal(null)
     }
 
     return (
@@ -106,15 +92,14 @@ export default function SubmitProposalPage() {
                     Submit Proposal
                 </h1>
                 <p className="text-sm text-slate-500 mt-1">
-                    Please fill out all sections of your project proposal. Make sure to be detailed and cleared about your project goals.
+                    Please fill out all sections of your project proposal. Make sure to be detailed and clear about your project goals.
                 </p>
             </div>
 
-            {/* ─── Proposal Form ──────────────────────────────── */}
-            {!submittedProposal && (
+            {/* ─── Proposal Form (only if no pending/approved proposal) ── */}
+            {(!latestProposal || latestProposal.status === "rejected") && (
                 <Card className="shadow-sm border-slate-100">
                     <CardContent className="p-6 space-y-6">
-                        {/* Project Title */}
                         <div className="space-y-2">
                             <Label htmlFor="project-title" className="font-semibold text-sm text-slate-700">
                                 Project Title
@@ -128,7 +113,6 @@ export default function SubmitProposalPage() {
                             />
                         </div>
 
-                        {/* Project Description */}
                         <div className="space-y-2">
                             <Label htmlFor="project-desc" className="font-semibold text-sm text-slate-700">
                                 Project Description
@@ -150,7 +134,6 @@ export default function SubmitProposalPage() {
 
                         <Separator />
 
-                        {/* Submit Button */}
                         <div className="flex justify-end">
                             <Button
                                 className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6"
@@ -165,9 +148,9 @@ export default function SubmitProposalPage() {
                 </Card>
             )}
 
-            {/* ─── Submitted Proposal Card ────────────────────── */}
-            {submittedProposal && (
-                <Card className="shadow-sm border-slate-100">
+            {/* ─── Submitted Proposal Cards ───────────────────── */}
+            {myProposals.map((proposal) => (
+                <Card key={proposal.id} className="shadow-sm border-slate-100">
                     <CardContent className="p-6 space-y-5">
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex items-center gap-3">
@@ -176,14 +159,14 @@ export default function SubmitProposalPage() {
                                 </div>
                                 <div>
                                     <h2 className="font-bold text-lg text-slate-900">Your Proposal</h2>
-                                    <p className="text-xs text-slate-500">Submitted on {submittedProposal.submittedDate}</p>
+                                    <p className="text-xs text-slate-500">Submitted on {proposal.submittedDate}</p>
                                 </div>
                             </div>
                             <Badge
                                 variant="outline"
-                                className={`text-xs font-semibold ${statusConfig(submittedProposal.status).color}`}
+                                className={`text-xs font-semibold ${statusConfig(proposal.status).color}`}
                             >
-                                {statusConfig(submittedProposal.status).label}
+                                {statusConfig(proposal.status).label}
                             </Badge>
                         </div>
 
@@ -192,53 +175,68 @@ export default function SubmitProposalPage() {
                         <div className="space-y-4">
                             <div className="space-y-1.5">
                                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Project Title</p>
-                                <p className="text-sm font-medium text-slate-800">{submittedProposal.title}</p>
+                                <p className="text-sm font-medium text-slate-800">{proposal.title}</p>
                             </div>
                             <div className="space-y-1.5">
                                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Project Description</p>
-                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{submittedProposal.description}</p>
+                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{proposal.description}</p>
                             </div>
+                            {proposal.supervisor && (
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Supervisor</p>
+                                    <p className="text-sm font-medium text-slate-800">{proposal.supervisor}</p>
+                                </div>
+                            )}
                         </div>
 
-                        {submittedProposal.feedback && (
+                        {/* ─── Remarks / Feedback Timeline ────────── */}
+                        {proposal.remarks.length > 0 && (
                             <>
                                 <Separator />
-                                <div className="space-y-1.5">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Admin Feedback</p>
-                                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                                        <p className="text-sm text-slate-700">{submittedProposal.feedback}</p>
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <MessageSquare className="w-4 h-4 text-slate-500" />
+                                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            Remarks &amp; Feedback ({proposal.remarks.length})
+                                        </p>
                                     </div>
-                                </div>
-                            </>
-                        )}
-
-                        {submittedProposal.status === "pending" && (
-                            <>
-                                <Separator />
-                                <div className="flex items-center gap-3 justify-end">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-1.5 text-slate-600"
-                                        onClick={handleEdit}
-                                    >
-                                        <Edit3 className="w-4 h-4" />
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                                        onClick={() => setDeleteOpen(true)}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        Withdraw
-                                    </Button>
+                                    <div className="space-y-3">
+                                        {proposal.remarks.map((remark) => (
+                                            <div
+                                                key={remark.id}
+                                                className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2"
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1 bg-slate-200 rounded-full">
+                                                            <User className="w-3 h-3 text-slate-600" />
+                                                        </div>
+                                                        <span className="text-xs font-semibold text-slate-700">{remark.from}</span>
+                                                        <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-500">
+                                                            {remark.fromRole}
+                                                        </Badge>
+                                                        {remarkActionBadge(remark.action)}
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-400">{remark.date}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-700 leading-relaxed">{remark.message}</p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </>
                         )}
                     </CardContent>
                 </Card>
+            ))}
+
+            {/* ─── Empty State ────────────────────────────────── */}
+            {myProposals.length === 0 && (
+                <div className="text-center py-12 text-slate-400">
+                    <FileText className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm font-medium">No proposals submitted yet</p>
+                    <p className="text-xs mt-1">Fill out the form above to submit your first proposal</p>
+                </div>
             )}
 
             {/* ─── Confirm Submit Dialog ──────────────────────── */}
@@ -259,7 +257,7 @@ export default function SubmitProposalPage() {
                             <p className="text-xs text-slate-600 line-clamp-3">{description}</p>
                         </div>
                         <p className="text-xs text-slate-500">
-                            You can edit or withdraw your proposal while it is pending review.
+                            Your proposal will be sent to the admin for review.
                         </p>
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0">
@@ -297,35 +295,6 @@ export default function SubmitProposalPage() {
                             Done
                         </Button>
                     </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* ─── Delete Confirmation Dialog ─────────────────── */}
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-lg flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5 text-red-600" />
-                            Withdraw Proposal
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="py-3 space-y-3">
-                        <p className="text-sm text-slate-600">
-                            Are you sure you want to withdraw your proposal? This action cannot be undone.
-                        </p>
-                    </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                        </DialogClose>
-                        <Button
-                            className="gap-1.5 bg-red-600 hover:bg-red-700 text-white"
-                            onClick={handleDelete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Withdraw
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

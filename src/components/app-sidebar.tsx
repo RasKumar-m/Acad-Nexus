@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { usePathname } from "next/navigation"
+import Link from "next/link"
 import {
     BookOpen,
     Home,
@@ -11,18 +13,17 @@ import {
     FolderKanban,
     FileText,
     MessageSquare,
-    Settings,
     Upload,
     Clock,
     FolderOpen,
     Bell,
     UserCheck,
+    type LucideIcon,
 } from "lucide-react"
 
 import {
     Sidebar,
     SidebarContent,
-    SidebarFooter,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
@@ -30,134 +31,45 @@ import {
     SidebarRail,
 } from "@/components/ui/sidebar"
 
-const adminNav = [
-    {
-        title: "Home",
-        url: "/admin",
-        icon: Home,
-        isActive: true,
-    },
-    {
-        title: "Manage Students",
-        url: "/admin/students",
-        icon: Users,
-    },
-    {
-        title: "Manage Teachers",
-        url: "/admin/teachers",
-        icon: UserSquare2,
-    },
-    {
-        title: "Assign Guide",
-        url: "/admin/assign-guide",
-        icon: Briefcase,
-    },
-    {
-        title: "Deadlines",
-        url: "/admin/deadlines",
-        icon: CalendarClock,
-    },
-    {
-        title: "Projects",
-        url: "/admin/projects",
-        icon: FolderKanban,
-    },
+interface NavItem {
+    title: string
+    url: string
+    icon: LucideIcon
+}
+
+const adminNav: NavItem[] = [
+    { title: "Dashboard", url: "/admin", icon: Home },
+    { title: "Students", url: "/admin/students", icon: Users },
+    { title: "Teachers", url: "/admin/teachers", icon: UserSquare2 },
+    { title: "Assign Guide", url: "/admin/assign-guide", icon: Briefcase },
+    { title: "Deadlines", url: "/admin/deadlines", icon: CalendarClock },
+    { title: "Projects", url: "/admin/projects", icon: FolderKanban },
 ]
 
-const defaultNav = [
-    {
-        title: "Home",
-        url: "#",
-        icon: Home,
-        isActive: true,
-    },
-    {
-        title: "Documents",
-        url: "#",
-        icon: FileText,
-    },
-    {
-        title: "Uploads",
-        url: "#",
-        icon: Upload,
-    },
-    {
-        title: "Team",
-        url: "#",
-        icon: Users,
-    },
-    {
-        title: "Chat",
-        url: "#",
-        icon: MessageSquare,
-    },
-    {
-        title: "Settings",
-        url: "#",
-        icon: Settings,
-    },
+const teacherNav: NavItem[] = [
+    { title: "Dashboard", url: "/guide", icon: Home },
+    { title: "Pending Requests", url: "/guide/pending-requests", icon: Clock },
+    { title: "Assigned Students", url: "/guide/assigned-students", icon: Users },
+    { title: "Student Files", url: "/guide/student-files", icon: FolderOpen },
 ]
 
-const teacherNav = [
-    {
-        title: "Home",
-        url: "/guide",
-        icon: Home,
-        isActive: true,
-    },
-    {
-        title: "Pending Requests",
-        url: "/guide/pending-requests",
-        icon: Clock,
-    },
-    {
-        title: "Assigned Students",
-        url: "/guide/assigned-students",
-        icon: Users,
-    },
-    {
-        title: "Student Files",
-        url: "/guide/student-files",
-        icon: FolderOpen,
-    },
+const studentNav: NavItem[] = [
+    { title: "Dashboard", url: "/student", icon: Home },
+    { title: "Submit Proposal", url: "/student/submit-proposal", icon: FileText },
+    { title: "Upload Files", url: "/student/upload-files", icon: Upload },
+    { title: "Supervisor", url: "/student/supervisor", icon: UserCheck },
+    { title: "Feedback", url: "/student/feedback", icon: MessageSquare },
+    { title: "Notifications", url: "/student/notifications", icon: Bell },
 ]
 
-const studentNav = [
-    {
-        title: "Home",
-        url: "/student",
-        icon: Home,
-        isActive: true,
-    },
-    {
-        title: "Submit Proposal",
-        url: "/student/submit-proposal",
-        icon: FileText,
-    },
-    {
-        title: "Upload Files",
-        url: "/student/upload-files",
-        icon: Upload,
-    },
-    {
-        title: "Supervisor",
-        url: "/student/supervisor",
-        icon: UserCheck,
-    },
-    {
-        title: "Feedback",
-        url: "/student/feedback",
-        icon: MessageSquare,
-    },
-    {
-        title: "Notifications",
-        url: "/student/notifications",
-        icon: Bell,
-    },
-]
+function isActive(pathname: string, url: string, isHome: boolean): boolean {
+    if (isHome) return pathname === url
+    return pathname.startsWith(url)
+}
 
 export function AppSidebar({ role, ...props }: React.ComponentProps<typeof Sidebar> & { role?: string }) {
-    const navItems = role === "Admin" ? adminNav : role === "Teacher" ? teacherNav : role === "Student" ? studentNav : defaultNav;
+    const pathname = usePathname()
+    const navItems = role === "Admin" ? adminNav : role === "Teacher" ? teacherNav : role === "Student" ? studentNav : adminNav
 
     return (
         <Sidebar collapsible="icon" {...props}>
@@ -165,34 +77,41 @@ export function AppSidebar({ role, ...props }: React.ComponentProps<typeof Sideb
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <a href="#">
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-600 text-sidebar-primary-foreground">
+                            <Link href="#">
+                                <div className="flex aspect-square size-8 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-indigo-600 text-white shadow-md">
                                     <BookOpen className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold uppercase tracking-wider text-xs">
-                                        ACAD
+                                    <span className="truncate font-bold text-sm tracking-tight text-slate-800">
+                                        Acad Nexus
                                     </span>
-                                    <span className="truncate text-xs text-muted-foreground">Automation System</span>
+                                    <span className="truncate text-[11px] text-muted-foreground">FYP Management</span>
                                 </div>
-                            </a>
+                            </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
-                {/* Navigation */}
-                <SidebarMenu>
-                    {navItems.map((item) => (
-                        <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton asChild tooltip={item.title} isActive={item.isActive} className="mt-1">
-                                <a href={item.url}>
-                                    <item.icon />
-                                    <span>{item.title}</span>
-                                </a>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    ))}
+                <SidebarMenu className="px-2 pt-2">
+                    {navItems.map((item, idx) => {
+                        const active = isActive(pathname, item.url, idx === 0)
+                        return (
+                            <SidebarMenuItem key={item.title}>
+                                <SidebarMenuButton
+                                    asChild
+                                    tooltip={item.title}
+                                    isActive={active}
+                                    className="mt-0.5 rounded-lg transition-colors"
+                                >
+                                    <Link href={item.url}>
+                                        <item.icon className="size-4 shrink-0" />
+                                        <span className="truncate">{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        )
+                    })}
                 </SidebarMenu>
             </SidebarContent>
             <SidebarRail />

@@ -6,8 +6,8 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"], display: 'swap' });
 
 export const metadata: Metadata = {
-  title: "ACAD - Automation System",
-  description: "Final Year Project Management System",
+  title: "Acad Nexus — FYP Management",
+  description: "Academic Project Management & Supervision Platform",
 };
 
 export default function RootLayout({

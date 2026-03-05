@@ -10,7 +10,10 @@ import {
     CalendarDays,
     Star,
     Inbox,
+    FileText,
 } from "lucide-react"
+import { useProposals } from "@/lib/proposal-context"
+import { useAuth } from "@/lib/auth-context"
 
 // ─── Types ──────────────────────────────────────────────────────────
 interface FeedbackItem {
@@ -26,54 +29,33 @@ interface FeedbackItem {
     priority: "normal" | "important"
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────
-const feedbackData: FeedbackItem[] = [
-    {
-        id: 1,
-        from: "Dr. Aneela",
-        fromRole: "Supervisor",
-        initials: "DA",
-        avatarColor: "bg-blue-600",
-        subject: "Project Proposal Review",
-        message:
-            "Your project proposal looks promising. However, please add more details to the system architecture section. Also include a timeline with milestones for each phase of the project. I'd also like to see a brief literature review section before the next submission.",
-        date: "March 3, 2026",
-        isRead: true,
-        priority: "important",
-    },
-    {
-        id: 2,
-        from: "Dr. Aneela",
-        fromRole: "Supervisor",
-        initials: "DA",
-        avatarColor: "bg-blue-600",
-        subject: "Progress Report Feedback",
-        message:
-            "Good progress so far. The database schema is well-designed. Focus on completing the authentication module by next week. Make sure to write unit tests as you go.",
-        date: "February 20, 2026",
-        isRead: true,
-        priority: "normal",
-    },
-    {
-        id: 3,
-        from: "Admin Office",
-        fromRole: "Administrator",
-        initials: "AO",
-        avatarColor: "bg-slate-500",
-        subject: "File Submission Reminder",
-        message:
-            "Please upload your mid-semester progress report by the end of this week. Late submissions will not be accepted without prior approval from your supervisor.",
-        date: "February 15, 2026",
-        isRead: false,
-        priority: "important",
-    },
-]
-
 // ─── Page ───────────────────────────────────────────────────────────
 export default function FeedbackPage() {
-    const [feedbacks] = React.useState<FeedbackItem[]>(feedbackData)
+    const { user } = useAuth()
+    const { getProposalsByStudent } = useProposals()
+
+    const studentEmail = user?.email ?? ""
+    const myProposals = getProposalsByStudent(studentEmail)
+
+    // Convert proposal remarks into FeedbackItem format
+    const proposalFeedback: FeedbackItem[] = myProposals.flatMap((p) =>
+        p.remarks.map((r) => ({
+            id: r.id,
+            from: r.from,
+            fromRole: r.fromRole === "Admin" ? "Administrator" : "Supervisor",
+            initials: r.from.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
+            avatarColor: r.fromRole === "Admin" ? "bg-slate-500" : "bg-blue-600",
+            subject: `${r.action === "approved" ? "Proposal Approved" : r.action === "rejected" ? "Proposal Rejected" : "Feedback"} — ${p.title}`,
+            message: r.message,
+            date: r.date,
+            isRead: false,
+            priority: (r.action === "approved" || r.action === "rejected" ? "important" : "normal") as "important" | "normal",
+        }))
+    ).sort((a, b) => b.id - a.id)
+
     const [selectedId, setSelectedId] = React.useState<number | null>(null)
 
+    const feedbacks = proposalFeedback
     const selectedFeedback = feedbacks.find((f) => f.id === selectedId) ?? null
     const unreadCount = feedbacks.filter((f) => !f.isRead).length
 
@@ -84,12 +66,12 @@ export default function FeedbackPage() {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Feedback</h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        View feedback from your supervisor and administration
+                        View remarks and feedback from your supervisor and administration on your proposals
                     </p>
                 </div>
-                {unreadCount > 0 && (
+                {feedbacks.length > 0 && (
                     <Badge variant="outline" className="text-xs font-semibold border-blue-300 bg-blue-50 text-blue-700 w-fit">
-                        {unreadCount} unread
+                        {feedbacks.length} message{feedbacks.length !== 1 ? "s" : ""}
                     </Badge>
                 )}
             </div>
@@ -100,7 +82,7 @@ export default function FeedbackPage() {
                     <CardContent className="p-16 flex flex-col items-center gap-3 text-slate-400">
                         <Inbox className="w-12 h-12 text-slate-300" />
                         <p className="font-semibold text-lg text-slate-500">No feedback yet</p>
-                        <p className="text-sm">Feedback from your supervisor will appear here.</p>
+                        <p className="text-sm">Submit your proposal to start receiving feedback from admin and supervisor.</p>
                     </CardContent>
                 </Card>
             ) : (
@@ -110,7 +92,7 @@ export default function FeedbackPage() {
                         {feedbacks.map((fb) => (
                             <Card
                                 key={fb.id}
-                                className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${selectedId === fb.id ? "border-blue-400 ring-1 ring-blue-200" : "border-slate-100"} ${!fb.isRead ? "bg-blue-50/40" : ""}`}
+                                className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${selectedId === fb.id ? "border-blue-400 ring-1 ring-blue-200" : "border-slate-100"}`}
                                 onClick={() => setSelectedId(fb.id)}
                             >
                                 <CardContent className="p-4">
@@ -120,14 +102,14 @@ export default function FeedbackPage() {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center justify-between gap-2">
-                                                <h3 className={`text-sm truncate ${!fb.isRead ? "font-bold text-slate-900" : "font-medium text-slate-800"}`}>
+                                                <h3 className="text-sm truncate font-medium text-slate-800">
                                                     {fb.from}
                                                 </h3>
                                                 {fb.priority === "important" && (
                                                     <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
                                                 )}
                                             </div>
-                                            <p className={`text-xs truncate mt-0.5 ${!fb.isRead ? "font-semibold text-slate-700" : "text-slate-600"}`}>
+                                            <p className="text-xs truncate mt-0.5 font-semibold text-slate-700">
                                                 {fb.subject}
                                             </p>
                                             <p className="text-xs text-slate-400 mt-1 truncate">

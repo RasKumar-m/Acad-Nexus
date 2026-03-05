@@ -82,13 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Hydrate from localStorage on mount
     React.useEffect(() => {
         try {
-            const stored = localStorage.getItem("acad_user")
+            const stored = localStorage.getItem("acadnexus_user")
             if (stored) {
                 const parsed = JSON.parse(stored) as AuthUser
                 setUser(parsed)
             }
         } catch {
-            localStorage.removeItem("acad_user")
+            localStorage.removeItem("acadnexus_user")
         } finally {
             setIsLoading(false)
         }
@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 role: mockUser.role,
             }
             setUser(authUser)
-            localStorage.setItem("acad_user", JSON.stringify(authUser))
+            localStorage.setItem("acadnexus_user", JSON.stringify(authUser))
             return true
         }
 
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = React.useCallback(() => {
         setUser(null)
-        localStorage.removeItem("acad_user")
+        localStorage.removeItem("acadnexus_user")
     }, [])
 
     const value = React.useMemo(
