@@ -1,0 +1,244 @@
+"use client"
+
+import * as React from "react"
+import { BookOpen, LogIn, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+
+import { Button } from "@/components/ui/button"
+import {
+    Card,
+    CardContent,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { useAuth, roleRoutes, type UserRole } from "@/lib/auth-context"
+
+export default function LoginPage() {
+    const { user, login } = useAuth()
+    const router = useRouter()
+
+    const [role, setRole] = React.useState<string>("Student")
+    const [email, setEmail] = React.useState("")
+    const [password, setPassword] = React.useState("")
+    const [showPassword, setShowPassword] = React.useState(false)
+    const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [error, setError] = React.useState("")
+
+    // If already logged in, redirect to dashboard
+    React.useEffect(() => {
+        if (user) {
+            router.replace(roleRoutes[user.role])
+        }
+    }, [user, router])
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError("")
+
+        if (!email.trim()) {
+            setError("Please enter your email address")
+            return
+        }
+        if (!password.trim()) {
+            setError("Please enter your password")
+            return
+        }
+
+        setIsSubmitting(true)
+        const success = await login(email, password, role as UserRole)
+
+        if (success) {
+            router.replace(roleRoutes[role as UserRole])
+        } else {
+            setError("Invalid email, password, or role. Please try again.")
+            setIsSubmitting(false)
+        }
+    }
+
+    // Quick-fill demo credentials
+    function fillDemo(demoRole: string) {
+        switch (demoRole) {
+            case "Admin":
+                setRole("Admin")
+                setEmail("admin@acad.edu")
+                setPassword("admin123")
+                break
+            case "Teacher":
+                setRole("Teacher")
+                setEmail("sana.khan@university.edu")
+                setPassword("guide123")
+                break
+            case "Student":
+                setRole("Student")
+                setEmail("ahmed.saeed@student.edu")
+                setPassword("student123")
+                break
+        }
+        setError("")
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
+            {/* Logo & Header */}
+            <div className="mb-8 flex flex-col items-center">
+                <div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center mb-5 shadow-md">
+                    <BookOpen className="text-white w-7 h-7" />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1.5 tracking-tight text-center">
+                    Final Year Project Management System
+                </h1>
+                <p className="text-slate-500 text-sm">Sign in to your account</p>
+            </div>
+
+            {/* Login Card */}
+            <Card className="w-full max-w-md shadow-lg border border-slate-100 bg-white rounded-xl">
+                <CardContent className="p-6 sm:p-8">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Error Message */}
+                        {error && (
+                            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                {error}
+                            </div>
+                        )}
+
+                        {/* Role Select */}
+                        <div className="space-y-2">
+                            <Label htmlFor="role" className="text-sm font-semibold text-slate-700">
+                                Select Role
+                            </Label>
+                            <Select value={role} onValueChange={(v) => { setRole(v); setError("") }}>
+                                <SelectTrigger id="role" className="w-full bg-white h-11 border-slate-200 text-slate-700 rounded-lg">
+                                    <SelectValue placeholder="Select a role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Student">Student</SelectItem>
+                                    <SelectItem value="Teacher">Guide / Teacher</SelectItem>
+                                    <SelectItem value="Admin">Admin</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Email */}
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
+                                Email Address
+                            </Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="Enter your email"
+                                className="h-11 border-slate-200 bg-white placeholder:text-slate-400 rounded-lg text-slate-700"
+                                value={email}
+                                onChange={(e) => { setEmail(e.target.value); setError("") }}
+                                disabled={isSubmitting}
+                                autoComplete="email"
+                            />
+                        </div>
+
+                        {/* Password */}
+                        <div className="space-y-2">
+                            <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                                Password
+                            </Label>
+                            <div className="relative">
+                                <Input
+                                    id="password"
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Enter your password"
+                                    className="h-11 border-slate-200 bg-white placeholder:text-slate-400 rounded-lg text-slate-700 pr-11"
+                                    value={password}
+                                    onChange={(e) => { setPassword(e.target.value); setError("") }}
+                                    disabled={isSubmitting}
+                                    autoComplete="current-password"
+                                />
+                                <button
+                                    type="button"
+                                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    tabIndex={-1}
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Sign In Button */}
+                        <Button
+                            type="submit"
+                            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold h-11 rounded-lg text-sm shadow-sm transition-colors gap-2"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Signing in...
+                                </>
+                            ) : (
+                                <>
+                                    <LogIn className="w-4 h-4" />
+                                    Sign In
+                                </>
+                            )}
+                        </Button>
+                    </form>
+
+                    {/* Demo Credentials */}
+                    <div className="mt-6 pt-5 border-t border-slate-100">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center mb-3">
+                            Quick Login (Demo)
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs font-medium border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                                onClick={() => fillDemo("Student")}
+                            >
+                                Student
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs font-medium border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                onClick={() => fillDemo("Teacher")}
+                            >
+                                Guide
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs font-medium border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                                onClick={() => fillDemo("Admin")}
+                            >
+                                Admin
+                            </Button>
+                        </div>
+                        <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                <span className="font-semibold">Student:</span> ahmed.saeed@student.edu / student123<br />
+                                <span className="font-semibold">Guide:</span> sana.khan@university.edu / guide123<br />
+                                <span className="font-semibold">Admin:</span> admin@acad.edu / admin123
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Footer */}
+            <p className="text-xs text-slate-400 mt-6">
+                ACAD — Final Year Project Management System v1.0
+            </p>
+        </div>
+    )
+}
