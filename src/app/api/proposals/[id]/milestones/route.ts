@@ -49,9 +49,11 @@ export async function GET(_req: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "Proposal not found" }, { status: 404 })
         }
 
-        return NextResponse.json(serialiseMilestones(proposal.milestones))
+        const milestones = serialiseMilestones(proposal.milestones)
+        return NextResponse.json(milestones)
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Unknown error"
+        console.error("Error fetching milestones:", message)
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }
@@ -71,14 +73,24 @@ export async function POST(req: NextRequest, context: RouteContext) {
             )
         }
 
+        // Validate date format
+        try {
+            new Date(dueDate)
+        } catch (_) {
+            return NextResponse.json(
+                { error: "Invalid dueDate format" },
+                { status: 400 }
+            )
+        }
+
         const proposal = await Proposal.findByIdAndUpdate(
             id,
             {
                 $push: {
                     milestones: {
-                        title,
-                        description,
-                        dueDate,
+                        title: String(title).trim(),
+                        description: String(description).trim(),
+                        dueDate: String(dueDate),
                         status: "pending",
                         fileUrl: null,
                         fileName: null,
@@ -110,6 +122,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         return NextResponse.json(serialiseMilestones(proposal.milestones), { status: 201 })
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Unknown error"
+        console.error("Error creating milestone:", message)
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }

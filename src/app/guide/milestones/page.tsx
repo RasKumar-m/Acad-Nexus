@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
     Select,
     SelectContent,
@@ -135,6 +134,7 @@ export default function GuideMilestonesPage() {
 
         setCreating(true)
         try {
+            console.log("Creating milestone for proposal:", formProposalId)
             const res = await fetch(`/api/proposals/${formProposalId}/milestones`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -144,18 +144,24 @@ export default function GuideMilestonesPage() {
                     dueDate: String(formDueDate) 
                 }),
             })
+            
+            console.log("Response status:", res.status)
+            
             if (!res.ok) {
-                const err = await res.json()
-                setFormError(err.error || "Failed to create milestone")
+                const err = await res.json().catch(() => ({}))
+                console.error("API error:", err)
+                setFormError(err.error || `Failed to create milestone (${res.status})`)
                 return
             }
+            
             const updatedMilestones: MilestoneItem[] = await res.json()
             setMilestones((prev) => ({ ...prev, [formProposalId]: updatedMilestones }))
             setFormTitle("")
             setFormDesc("")
             setFormDueDate("")
             setFormProposalId("")
-        } catch {
+        } catch (err) {
+            console.error("Network error:", err)
             setFormError("Network error. Please try again.")
         } finally {
             setCreating(false)
@@ -223,38 +229,43 @@ export default function GuideMilestonesPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto">
+        <div className="flex flex-col gap-4 sm:gap-6 w-full px-4 sm:px-0 max-w-6xl mx-auto">
             {/* ─── Header ──────────────────────────────────────────── */}
-            <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                    <Milestone className="w-6 h-6 text-emerald-600" />
-                    Milestone Dashboard
+            <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-100 shadow-sm">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2 flex-wrap">
+                    <Milestone className="w-5 sm:w-6 h-5 sm:h-6 text-emerald-600 flex-shrink-0" />
+                    <span>Milestone Dashboard</span>
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-xs sm:text-sm text-slate-500 mt-2">
                     Create milestones for your assigned students and track their progress.
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 {/* ─── Create Milestone Form ───────────────────────── */}
-                <Card className="shadow-sm border-slate-100 bg-white xl:col-span-1">
+                <Card className="shadow-sm border-slate-100 bg-white lg:col-span-1">
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-800">
-                            <Plus className="w-4 h-4 text-emerald-600" />
-                            New Milestone
+                        <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2 text-slate-800">
+                            <Plus className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                            <span>New Milestone</span>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleCreate} className="space-y-4">
+                    <CardContent className="px-4 sm:px-6 pb-6">
+                        {myProposals.length === 0 && (
+                            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs sm:text-sm text-amber-800">
+                                No approved or completed assigned projects found. Approve a student project first.
+                            </div>
+                        )}
+                        <form onSubmit={handleCreate} className="space-y-3 sm:space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="ms-student">Student / Project</Label>
+                                <Label htmlFor="ms-student" className="text-xs sm:text-sm">Student / Project</Label>
                                 <Select value={formProposalId} onValueChange={setFormProposalId}>
-                                    <SelectTrigger id="ms-student">
+                                    <SelectTrigger id="ms-student" disabled={myProposals.length === 0} className="text-xs sm:text-sm">
                                         <SelectValue placeholder="Select a student" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {myProposals.map((p) => (
-                                            <SelectItem key={p._id} value={p._id}>
+                                            <SelectItem key={p._id} value={p._id} className="text-xs sm:text-sm">
                                                 {p.studentName} — {p.title}
                                             </SelectItem>
                                         ))}
@@ -263,42 +274,44 @@ export default function GuideMilestonesPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="ms-title">Milestone Title</Label>
+                                <Label htmlFor="ms-title" className="text-xs sm:text-sm">Milestone Title</Label>
                                 <Input
                                     id="ms-title"
                                     value={formTitle}
                                     onChange={(e) => setFormTitle(e.target.value)}
                                     placeholder="e.g. Literature Review"
+                                    className="text-xs sm:text-sm"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="ms-desc">Description</Label>
-                                <Textarea
+                                <Label htmlFor="ms-desc" className="text-xs sm:text-sm">Description</Label>
+                                <textarea
                                     id="ms-desc"
                                     value={formDesc}
-                                    onChange={(e) => setFormDesc(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormDesc(e.target.value)}
                                     placeholder="What the student needs to deliver"
                                     rows={3}
-                                    className="resize-none"
+                                    className="flex min-h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="ms-due">Due Date</Label>
+                                <Label htmlFor="ms-due" className="text-xs sm:text-sm">Due Date</Label>
                                 <Input
                                     id="ms-due"
                                     type="date"
                                     value={formDueDate}
                                     onChange={(e) => setFormDueDate(e.target.value)}
+                                    className="text-xs sm:text-sm"
                                 />
                             </div>
 
                             {formError && (
-                                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{formError}</p>
+                                <p className="text-xs sm:text-sm text-red-600 bg-red-50 px-2 sm:px-3 py-2 rounded-lg">{formError}</p>
                             )}
 
-                            <Button type="submit" disabled={creating} className="w-full">
+                            <Button type="submit" disabled={creating || myProposals.length === 0} className="w-full text-xs sm:text-sm py-2">
                                 {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
                                 Create Milestone
                             </Button>
@@ -307,14 +320,14 @@ export default function GuideMilestonesPage() {
                 </Card>
 
                 {/* ─── Milestones Table ────────────────────────────── */}
-                <Card className="shadow-sm border-slate-100 bg-white xl:col-span-2">
+                <Card className="shadow-sm border-slate-100 bg-white lg:col-span-2">
                     <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between flex-wrap gap-3">
-                            <CardTitle className="text-base font-semibold text-slate-800">
+                        <div className="flex flex-col gap-3">
+                            <CardTitle className="text-sm sm:text-base font-semibold text-slate-800">
                                 Active Milestones
                             </CardTitle>
                             <Select value={selectedProposalId} onValueChange={setSelectedProposalId}>
-                                <SelectTrigger className="w-full sm:w-64">
+                                <SelectTrigger className="w-full text-xs sm:text-sm">
                                     <SelectValue placeholder="All Students" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -330,62 +343,62 @@ export default function GuideMilestonesPage() {
                     </CardHeader>
                     <CardContent>
                         {filteredMilestones.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                                    <Milestone className="w-6 h-6 text-slate-300" />
+                            <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
+                                <div className="w-10 sm:w-12 h-10 sm:h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                                    <Milestone className="w-5 sm:w-6 h-5 sm:h-6 text-slate-300" />
                                 </div>
-                                <h4 className="font-medium text-slate-700 mb-1">No milestones yet</h4>
-                                <p className="text-sm text-slate-500">Create a milestone using the form on the left.</p>
+                                <h4 className="font-medium text-sm sm:text-base text-slate-700 mb-1">No milestones yet</h4>
+                                <p className="text-xs sm:text-sm text-slate-500 px-2">Create a milestone using the form on the left.</p>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-                                <Table className="min-w-[800px]">
+                            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                                <Table className="w-full text-xs sm:text-sm">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Student</TableHead>
-                                            <TableHead>Milestone</TableHead>
-                                            <TableHead>Due Date</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>File</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
+                                            <TableHead className="text-xs">Student</TableHead>
+                                            <TableHead className="text-xs">Milestone</TableHead>
+                                            <TableHead className="text-xs whitespace-nowrap">Due Date</TableHead>
+                                            <TableHead className="text-xs">Status</TableHead>
+                                            <TableHead className="text-xs">File</TableHead>
+                                            <TableHead className="text-right text-xs">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {filteredMilestones.map(({ proposal, milestone }) => (
                                             <TableRow key={milestone._id}>
-                                                <TableCell className="font-medium text-sm">
-                                                    {proposal.studentName}
+                                                <TableCell className="font-medium text-xs sm:text-sm">
+                                                    <span className="line-clamp-1">{proposal.studentName}</span>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div>
-                                                        <p className="font-medium text-sm text-slate-800">{milestone.title}</p>
-                                                        <p className="text-xs text-slate-500 max-w-48 truncate">{milestone.description}</p>
+                                                        <p className="font-medium text-xs sm:text-sm text-slate-800 line-clamp-1">{milestone.title}</p>
+                                                        <p className="text-xs text-slate-500 max-w-24 sm:max-w-48 line-clamp-1">{milestone.description}</p>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-sm text-slate-600">
+                                                <TableCell className="text-xs sm:text-sm text-slate-600 whitespace-nowrap">
                                                     {new Date(milestone.dueDate).toLocaleDateString("en-US", {
                                                         month: "short",
                                                         day: "numeric",
-                                                        year: "numeric",
                                                     })}
                                                 </TableCell>
                                                 <TableCell>{statusBadge(milestone.status)}</TableCell>
                                                 <TableCell>
                                                     {milestone.fileUrl ? (
-                                                        <div className="flex items-center gap-1">
+                                                        <div className="flex items-center gap-0.5 sm:gap-1">
                                                             <a
                                                                 href={milestone.fileUrl}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1"
+                                                                title="View file"
                                                             >
                                                                 <ExternalLink className="w-3 h-3" />
-                                                                View
                                                             </a>
                                                             <a
                                                                 href={milestone.fileUrl}
                                                                 download={milestone.fileName ?? "file"}
-                                                                className="text-emerald-600 hover:text-emerald-700 text-xs flex items-center gap-1 ml-2"
+                                                                className="text-emerald-600 hover:text-emerald-700 text-xs flex items-center gap-1"
+                                                                title="Download file"
                                                             >
                                                                 <Download className="w-3 h-3" />
                                                             </a>
@@ -395,28 +408,30 @@ export default function GuideMilestonesPage() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <div className="flex items-center justify-end gap-1">
+                                                    <div className="flex items-center justify-end gap-0.5 sm:gap-1">
                                                         {milestone.status === "submitted" && (
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-8 px-2 text-xs"
+                                                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 px-1.5 sm:px-2 text-xs"
                                                                 onClick={() => handleMarkReviewed(proposal._id, milestone._id)}
+                                                                title="Mark as reviewed"
                                                             >
-                                                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                                                Review
+                                                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                                                <span className="hidden sm:inline">Review</span>
                                                             </Button>
                                                         )}
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 px-2"
+                                                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-7 px-1.5"
                                                             onClick={() => {
                                                                 setDeleteTarget({ proposalId: proposal._id, milestone })
                                                                 setDeleteOpen(true)
                                                             }}
+                                                            title="Delete milestone"
                                                         >
-                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                            <Trash2 className="w-3 h-3" />
                                                         </Button>
                                                     </div>
                                                 </TableCell>
@@ -432,18 +447,18 @@ export default function GuideMilestonesPage() {
 
             {/* ─── Delete Confirmation ─────────────────────────────── */}
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <DialogContent>
+                <DialogContent className="mx-4 max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Delete Milestone</DialogTitle>
+                        <DialogTitle className="text-base sm:text-lg">Delete Milestone</DialogTitle>
                     </DialogHeader>
-                    <p className="text-sm text-slate-600">
-                        Are you sure you want to delete &ldquo;{deleteTarget?.milestone.title}&rdquo;? This action cannot be undone.
+                    <p className="text-xs sm:text-sm text-slate-600">
+                        Are you sure you want to delete &ldquo;<span className="font-semibold">{deleteTarget?.milestone.title}</span>&rdquo;? This action cannot be undone.
                     </p>
-                    <DialogFooter>
+                    <DialogFooter className="gap-2">
                         <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
+                            <Button variant="outline" className="text-xs sm:text-sm">Cancel</Button>
                         </DialogClose>
-                        <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                        <Button variant="destructive" onClick={handleDelete} disabled={deleting} className="text-xs sm:text-sm">
                             {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
                             Delete
                         </Button>
