@@ -39,6 +39,8 @@ import {
 } from "lucide-react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { useProposals } from "@/lib/proposal-context"
+import { useRouter } from "next/navigation"
+import { validateName, validateEmail, validatePassword } from "@/lib/validation"
 
 interface UserDoc {
     _id: string
@@ -59,6 +61,7 @@ interface FileDoc {
 
 export default function AdminDashboard() {
     const { proposals } = useProposals()
+    const router = useRouter()
 
     const [students, setStudents] = React.useState<UserDoc[]>([])
     const [teachers, setTeachers] = React.useState<UserDoc[]>([])
@@ -73,6 +76,7 @@ export default function AdminDashboard() {
     const [sDept, setSDept] = React.useState("Computer Science")
     const [studentAdded, setStudentAdded] = React.useState(false)
     const [studentSaving, setStudentSaving] = React.useState(false)
+    const [studentError, setStudentError] = React.useState("")
 
     // Add Teacher dialog
     const [addTeacherOpen, setAddTeacherOpen] = React.useState(false)
@@ -84,6 +88,7 @@ export default function AdminDashboard() {
     const [tMax, setTMax] = React.useState(5)
     const [teacherAdded, setTeacherAdded] = React.useState(false)
     const [teacherSaving, setTeacherSaving] = React.useState(false)
+    const [teacherError, setTeacherError] = React.useState("")
 
     // View Reports dialog
     const [reportsOpen, setReportsOpen] = React.useState(false)
@@ -135,7 +140,17 @@ export default function AdminDashboard() {
     })
 
     async function handleAddStudent() {
-        if (!sName.trim() || !sEmail.trim() || !sPass.trim()) return
+        if (!sName.trim() || !sEmail.trim() || !sPass.trim()) {
+            setStudentError("All fields are required")
+            return
+        }
+        const nameErr = validateName(sName)
+        if (nameErr) { setStudentError(nameErr); return }
+        const emailErr = validateEmail(sEmail)
+        if (emailErr) { setStudentError(emailErr); return }
+        const passErr = validatePassword(sPass, sName, sEmail)
+        if (passErr) { setStudentError(passErr); return }
+        setStudentError("")
         setStudentSaving(true)
         try {
             const res = await fetch("/api/users", {
@@ -152,16 +167,30 @@ export default function AdminDashboard() {
                     setSName(""); setSEmail(""); setSPass(""); setSDept("Computer Science")
                     setAddStudentOpen(false)
                 }, 1200)
+            } else {
+                const payload = await res.json().catch(() => ({}))
+                setStudentError(payload.error ?? "Failed to add student")
             }
         } catch (err) {
             console.error("Failed to add student:", err)
+            setStudentError("Network error. Please try again.")
         } finally {
             setStudentSaving(false)
         }
     }
 
     async function handleAddTeacher() {
-        if (!tName.trim() || !tEmail.trim() || !tPass.trim()) return
+        if (!tName.trim() || !tEmail.trim() || !tPass.trim()) {
+            setTeacherError("All fields are required")
+            return
+        }
+        const nameErr = validateName(tName)
+        if (nameErr) { setTeacherError(nameErr); return }
+        const emailErr = validateEmail(tEmail)
+        if (emailErr) { setTeacherError(emailErr); return }
+        const passErr = validatePassword(tPass, tName, tEmail)
+        if (passErr) { setTeacherError(passErr); return }
+        setTeacherError("")
         setTeacherSaving(true)
         try {
             const res = await fetch("/api/users", {
@@ -178,9 +207,13 @@ export default function AdminDashboard() {
                     setTName(""); setTEmail(""); setTPass(""); setTDept("Electrical Engineering"); setTExp("Database Systems"); setTMax(5)
                     setAddTeacherOpen(false)
                 }, 1200)
+            } else {
+                const payload = await res.json().catch(() => ({}))
+                setTeacherError(payload.error ?? "Failed to add teacher")
             }
         } catch (err) {
             console.error("Failed to add teacher:", err)
+            setTeacherError("Network error. Please try again.")
         } finally {
             setTeacherSaving(false)
         }
@@ -207,7 +240,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
-                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white cursor-pointer" onClick={() => router.push("/admin/students")}>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0"><GraduationCap className="w-5 h-5" /></div>
                         <div className="min-w-0">
@@ -216,7 +249,7 @@ export default function AdminDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white cursor-pointer" onClick={() => router.push("/admin/teachers")}>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl shrink-0"><Users className="w-5 h-5" /></div>
                         <div className="min-w-0">
@@ -225,7 +258,7 @@ export default function AdminDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white cursor-pointer" onClick={() => router.push("/admin/projects?status=pending")}>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl shrink-0"><Clock className="w-5 h-5" /></div>
                         <div className="min-w-0">
@@ -234,7 +267,7 @@ export default function AdminDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white cursor-pointer" onClick={() => router.push("/admin/projects")}>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shrink-0"><FileText className="w-5 h-5" /></div>
                         <div className="min-w-0">
@@ -243,7 +276,7 @@ export default function AdminDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white col-span-2 md:col-span-1">
+                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white col-span-2 md:col-span-1 cursor-pointer" onClick={() => router.push("/admin/deadlines?status=overdue")}>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shrink-0"><AlertCircle className="w-5 h-5" /></div>
                         <div className="min-w-0">
@@ -346,9 +379,21 @@ export default function AdminDashboard() {
                     ) : (
                         <>
                             <div className="grid gap-4 py-4">
-                                <div className="grid gap-2"><Label htmlFor="qs-name">Full Name</Label><Input id="qs-name" placeholder="Ahmed Saeed" value={sName} onChange={(e) => setSName(e.target.value)} /></div>
-                                <div className="grid gap-2"><Label htmlFor="qs-email">Email</Label><Input id="qs-email" type="email" placeholder="ahmed@example.com" value={sEmail} onChange={(e) => setSEmail(e.target.value)} /></div>
-                                <div className="grid gap-2"><Label htmlFor="qs-pass">Password</Label><Input id="qs-pass" type="password" placeholder="••••••••" value={sPass} onChange={(e) => setSPass(e.target.value)} /></div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="qs-name">Full Name</Label>
+                                    <Input id="qs-name" placeholder="Ahmed Saeed" value={sName} onChange={(e) => { setSName(e.target.value); setStudentError("") }} />
+                                    <p className="text-[11px] text-slate-400">Letters, spaces, apostrophes, and hyphens only (3-60 chars)</p>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="qs-email">Email</Label>
+                                    <Input id="qs-email" type="email" placeholder="ahmed@example.com" value={sEmail} onChange={(e) => { setSEmail(e.target.value); setStudentError("") }} />
+                                    <p className="text-[11px] text-slate-400">Must be a valid email (e.g. user@domain.com)</p>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="qs-pass">Password</Label>
+                                    <Input id="qs-pass" type="password" placeholder="••••••••" value={sPass} onChange={(e) => { setSPass(e.target.value); setStudentError("") }} />
+                                    <p className="text-[11px] text-slate-400">8-64 chars with uppercase, lowercase, number, and special character</p>
+                                </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="qs-dept">Department</Label>
                                     <Select value={sDept} onValueChange={setSDept}>
@@ -360,6 +405,7 @@ export default function AdminDashboard() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                                {studentError && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">{studentError}</p>}
                             </div>
                             <DialogFooter className="gap-2 sm:gap-0">
                                 <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
@@ -383,9 +429,21 @@ export default function AdminDashboard() {
                     ) : (
                         <>
                             <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-                                <div className="grid gap-2"><Label htmlFor="qt-name">Full Name</Label><Input id="qt-name" placeholder="Dr. Aneela" value={tName} onChange={(e) => setTName(e.target.value)} /></div>
-                                <div className="grid gap-2"><Label htmlFor="qt-email">Email</Label><Input id="qt-email" type="email" placeholder="aneela@gmail.com" value={tEmail} onChange={(e) => setTEmail(e.target.value)} /></div>
-                                <div className="grid gap-2"><Label htmlFor="qt-pass">Password</Label><Input id="qt-pass" type="password" placeholder="••••••••" value={tPass} onChange={(e) => setTPass(e.target.value)} /></div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="qt-name">Full Name</Label>
+                                    <Input id="qt-name" placeholder="Dr. Aneela" value={tName} onChange={(e) => { setTName(e.target.value); setTeacherError("") }} />
+                                    <p className="text-[11px] text-slate-400">Letters, spaces, apostrophes, and hyphens only (3-60 chars)</p>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="qt-email">Email</Label>
+                                    <Input id="qt-email" type="email" placeholder="aneela@gmail.com" value={tEmail} onChange={(e) => { setTEmail(e.target.value); setTeacherError("") }} />
+                                    <p className="text-[11px] text-slate-400">Must be a valid email (e.g. user@domain.com)</p>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="qt-pass">Password</Label>
+                                    <Input id="qt-pass" type="password" placeholder="••••••••" value={tPass} onChange={(e) => { setTPass(e.target.value); setTeacherError("") }} />
+                                    <p className="text-[11px] text-slate-400">8-64 chars with uppercase, lowercase, number, and special character</p>
+                                </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="qt-dept">Department</Label>
                                     <Select value={tDept} onValueChange={setTDept}>
@@ -414,6 +472,7 @@ export default function AdminDashboard() {
                                     </Select>
                                 </div>
                                 <div className="grid gap-2"><Label htmlFor="qt-max">Max Students</Label><Input id="qt-max" type="number" value={tMax} onChange={(e) => setTMax(Number(e.target.value))} min={1} /></div>
+                                {teacherError && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">{teacherError}</p>}
                             </div>
                             <DialogFooter className="gap-2 sm:gap-0 mt-2">
                                 <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>

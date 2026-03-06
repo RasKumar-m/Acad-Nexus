@@ -51,6 +51,7 @@ import {
 } from "lucide-react"
 import { useProposals, type ProposalStatus, type Proposal } from "@/lib/proposal-context"
 import FileCard from "@/components/FileCard"
+import { useSearchParams } from "next/navigation"
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function statusBadge(status: ProposalStatus) {
@@ -80,9 +81,10 @@ function truncateText(text: string, max: number) {
 // ─── Page Component ─────────────────────────────────────────────────
 export default function AdminProjectsPage() {
     const { proposals, updateProposalStatus, addRemark } = useProposals()
+    const searchParams = useSearchParams()
 
     const [searchQuery, setSearchQuery] = React.useState("")
-    const [filterStatus, setFilterStatus] = React.useState("all")
+    const [filterStatus, setFilterStatus] = React.useState(searchParams.get("status") ?? "all")
     const [filterSupervisor, setFilterSupervisor] = React.useState("all")
     const [supervisorNames, setSupervisorNames] = React.useState<string[]>([])
 

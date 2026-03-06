@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import dbConnect from "@/lib/mongodb"
 import User from "@/models/User"
+import { validateEmail } from "@/lib/validation"
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -17,10 +18,20 @@ export const authOptions: NextAuthOptions = {
                     throw new Error("Email and password are required")
                 }
 
+                const email = credentials.email.toLowerCase().trim()
+                const emailError = validateEmail(email)
+                if (emailError) {
+                    throw new Error("Invalid email format")
+                }
+
+                if (String(credentials.password).length < 8) {
+                    throw new Error("Invalid password")
+                }
+
                 await dbConnect()
 
                 const user = await User.findOne({
-                    email: credentials.email.toLowerCase().trim(),
+                    email,
                 })
 
                 if (!user) {

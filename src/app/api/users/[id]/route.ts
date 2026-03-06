@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import dbConnect from "@/lib/mongodb"
 import User from "@/models/User"
+import {
+    normalizeRole,
+    validateEmail,
+    validateName,
+    validatePassword,
+} from "@/lib/validation"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -12,19 +18,56 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     try {
         await dbConnect()
         const { id } = await context.params
-        const body = await req.json()
+        const body = (await req.json()) as Record<string, unknown>
 
         const allowed: Record<string, unknown> = {}
-        const safeFields = ["name", "email", "department", "expertise", "maxStudents", "role"] as const
+        const safeFields = ["name", "email", "department", "expertise", "maxStudents", "role", "assignedGuideId", "assignedGuideName"] as const
         for (const key of safeFields) {
             if (body[key] !== undefined) {
                 allowed[key] = body[key]
             }
         }
 
+        if (allowed.name !== undefined) {
+            const nextName = String(allowed.name).trim()
+            const err = validateName(nextName)
+            if (err) return NextResponse.json({ error: err }, { status: 400 })
+            allowed.name = nextName
+        }
+
+        if (allowed.email !== undefined) {
+            const nextEmail = String(allowed.email).toLowerCase().trim()
+            const err = validateEmail(nextEmail)
+            if (err) return NextResponse.json({ error: err }, { status: 400 })
+            const exists = await User.findOne({ email: nextEmail, _id: { $ne: id } }).select("_id").lean()
+            if (exists) return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 })
+            allowed.email = nextEmail
+        }
+
+        if (allowed.role !== undefined) {
+            const role = normalizeRole(String(allowed.role))
+            if (!role) return NextResponse.json({ error: "Invalid role" }, { status: 400 })
+            allowed.role = role
+        }
+
+        if (allowed.maxStudents !== undefined) {
+            const max = Number(allowed.maxStudents)
+            if (Number.isNaN(max) || max < 1 || max > 50) {
+                return NextResponse.json({ error: "maxStudents must be between 1 and 50" }, { status: 400 })
+            }
+            allowed.maxStudents = max
+        }
+
         // If password is provided, hash it
         if (body.password) {
-            allowed.password = await bcrypt.hash(body.password, 12)
+            const nextPassword = String(body.password)
+            const name = allowed.name ? String(allowed.name) : undefined
+            const email = allowed.email ? String(allowed.email) : undefined
+            const passwordErr = validatePassword(nextPassword, name, email)
+            if (passwordErr) {
+                return NextResponse.json({ error: passwordErr }, { status: 400 })
+            }
+            allowed.password = await bcrypt.hash(nextPassword, 12)
         }
 
         const user = await User.findByIdAndUpdate(id, { $set: allowed }, {

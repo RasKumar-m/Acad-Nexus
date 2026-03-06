@@ -40,6 +40,7 @@ import Link from "next/link"
 import { useProposals } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
 import { useUploadThing } from "@/lib/uploadthing"
+import { ActivityHeatmap } from "@/components/activity-heatmap"
 
 // ─── Milestone type ─────────────────────────────────────────────────
 interface MilestoneItem {
@@ -158,6 +159,26 @@ export default function StudentDashboard() {
 
     const pendingMilestones = milestones.filter((m) => m.status === "pending")
     const completedMilestones = milestones.filter((m) => m.status !== "pending")
+
+    const [activityMap, setActivityMap] = React.useState<Record<string, number>>({})
+    const [streak, setStreak] = React.useState({ current: 0, longest: 0, totalActiveDays: 0 })
+
+    React.useEffect(() => {
+        if (!studentEmail) return
+
+        fetch(`/api/activity?studentEmail=${encodeURIComponent(studentEmail)}&days=120`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data: { activity?: Record<string, number>; currentStreak?: number; longestStreak?: number; totalActiveDays?: number } | null) => {
+                if (!data) return
+                setActivityMap(data.activity ?? {})
+                setStreak({
+                    current: data.currentStreak ?? 0,
+                    longest: data.longestStreak ?? 0,
+                    totalActiveDays: data.totalActiveDays ?? 0,
+                })
+            })
+            .catch(() => {})
+    }, [studentEmail])
 
     return (
         <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
@@ -437,6 +458,30 @@ export default function StudentDashboard() {
 
                 {/* Right Column (Smaller) */}
                 <div className="space-y-6">
+
+                    <Card className="shadow-sm border-slate-100 bg-white">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base font-semibold text-slate-800">Consistency Heatmap</CardTitle>
+                            <CardDescription>Your daily submission activity — like GitHub&apos;s contribution graph.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <ActivityHeatmap activity={activityMap} days={120} title="Submission Activity" />
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                    <p className="text-slate-500">Current Streak</p>
+                                    <p className="font-semibold text-slate-800">{streak.current} day{streak.current === 1 ? "" : "s"}</p>
+                                </div>
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                    <p className="text-slate-500">Longest Streak</p>
+                                    <p className="font-semibold text-slate-800">{streak.longest} day{streak.longest === 1 ? "" : "s"}</p>
+                                </div>
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                    <p className="text-slate-500">Active Days</p>
+                                    <p className="font-semibold text-slate-800">{streak.totalActiveDays} day{streak.totalActiveDays === 1 ? "" : "s"}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Latest Feedback from Proposals */}
                     <Card className="shadow-sm border-slate-100 flex flex-col bg-white">

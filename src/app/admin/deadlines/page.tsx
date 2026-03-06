@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { CalendarClock, Clock, AlertTriangle, CheckCircle2, Search, CalendarDays, FileText, User, Users, Edit, Loader2 } from "lucide-react"
 import { useProposals, type Proposal } from "@/lib/proposal-context"
+import { useSearchParams } from "next/navigation"
 
 function getDeadlineStatus(deadline: string | null) {
     if (!deadline) return { label: "Not Set", color: "bg-slate-100 text-slate-600" }
@@ -26,8 +27,9 @@ function getDeadlineStatus(deadline: string | null) {
 
 export default function ManageDeadlinesPage() {
     const { proposals, refreshProposals } = useProposals()
+    const searchParams = useSearchParams()
     const [searchQuery, setSearchQuery] = React.useState("")
-    const [filterStatus, setFilterStatus] = React.useState("all")
+    const [filterStatus, setFilterStatus] = React.useState(searchParams.get("status") ?? "all")
 
     const [dialogOpen, setDialogOpen] = React.useState(false)
     const [projectSearch, setProjectSearch] = React.useState("")

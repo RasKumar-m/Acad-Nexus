@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import dbConnect from "@/lib/mongodb"
 import User from "@/models/User"
+import {
+    normalizeUserInput,
+    validateEmail,
+    validateName,
+    validatePassword,
+} from "@/lib/validation"
 
 // GET /api/users?role=student|guide|admin  — list users, optional role filter
 export async function GET(req: NextRequest) {
@@ -27,14 +33,36 @@ export async function POST(req: NextRequest) {
     try {
         await dbConnect()
 
-        const body = await req.json()
-        const { name, email, password, role, department, expertise, maxStudents } = body
+        const body = (await req.json()) as Record<string, unknown>
+        const normalized = normalizeUserInput(body)
+        const { name, email, password, role, department, expertise, maxStudents } = normalized
 
         if (!name || !email || !password || !role) {
             return NextResponse.json(
                 { error: "name, email, password, and role are required" },
                 { status: 400 }
             )
+        }
+
+        const nameError = validateName(name)
+        if (nameError) {
+            return NextResponse.json({ error: nameError }, { status: 400 })
+        }
+
+        const emailError = validateEmail(email)
+        if (emailError) {
+            return NextResponse.json({ error: emailError }, { status: 400 })
+        }
+
+        const passwordError = validatePassword(password, name, email)
+        if (passwordError) {
+            return NextResponse.json({ error: passwordError }, { status: 400 })
+        }
+
+        if (role === "guide") {
+            if (typeof maxStudents !== "number" || Number.isNaN(maxStudents) || maxStudents < 1 || maxStudents > 50) {
+                return NextResponse.json({ error: "Guide maxStudents must be between 1 and 50" }, { status: 400 })
+            }
         }
 
         const existing = await User.findOne({ email: email.toLowerCase().trim() })
@@ -48,13 +76,13 @@ export async function POST(req: NextRequest) {
         const hashedPassword = await bcrypt.hash(password, 12)
 
         const user = await User.create({
-            name: name.trim(),
-            email: email.toLowerCase().trim(),
+            name,
+            email,
             password: hashedPassword,
             role,
             department: department || "",
             expertise: expertise || "",
-            maxStudents: maxStudents || 5,
+            maxStudents: role === "guide" ? maxStudents : undefined,
         })
 
         const userObj = user.toObject()

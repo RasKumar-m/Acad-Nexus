@@ -6,12 +6,17 @@ export interface IUser extends Document {
     email: string
     password: string
     role: "admin" | "student" | "guide"
+    assignedGuideId?: string | null
+    assignedGuideName?: string | null
     department?: string
     expertise?: string
     maxStudents?: number
     createdAt: Date
     updatedAt: Date
 }
+
+const NAME_REGEX = /^[A-Za-z][A-Za-z\s'-]{1,58}[A-Za-z]$/
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 
 // ─── Schema ─────────────────────────────────────────────────────────
 const UserSchema = new Schema<IUser>(
@@ -20,6 +25,9 @@ const UserSchema = new Schema<IUser>(
             type: String,
             required: [true, "Name is required"],
             trim: true,
+            minlength: [3, "Name must be at least 3 characters"],
+            maxlength: [60, "Name must be at most 60 characters"],
+            match: [NAME_REGEX, "Name can only contain letters, spaces, apostrophes, and hyphens"],
         },
         email: {
             type: String,
@@ -27,11 +35,13 @@ const UserSchema = new Schema<IUser>(
             unique: true,
             lowercase: true,
             trim: true,
+            maxlength: [254, "Email must be at most 254 characters"],
+            match: [EMAIL_REGEX, "Please provide a valid email address"],
         },
         password: {
             type: String,
             required: [true, "Password is required"],
-            minlength: [6, "Password must be at least 6 characters"],
+            minlength: [8, "Password must be at least 8 characters"],
         },
         role: {
             type: String,
@@ -41,6 +51,14 @@ const UserSchema = new Schema<IUser>(
             },
             required: [true, "Role is required"],
             default: "student",
+        },
+        assignedGuideId: {
+            type: String,
+            default: null,
+        },
+        assignedGuideName: {
+            type: String,
+            default: null,
         },
         department: {
             type: String,
@@ -55,6 +73,8 @@ const UserSchema = new Schema<IUser>(
         maxStudents: {
             type: Number,
             default: 5,
+            min: [1, "maxStudents must be at least 1"],
+            max: [50, "maxStudents must be at most 50"],
         },
     },
     {

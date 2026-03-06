@@ -10,98 +10,261 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Users, CheckCircle2, AlertTriangle, Search, Check, Loader2 } from "lucide-react"
 import { useProposals } from "@/lib/proposal-context"
 
-interface GuideDoc { _id: string; name: string; email: string; department?: string; expertise?: string; maxStudents?: number }
+interface GuideDoc {
+    _id: string
+    name: string
+    email: string
+    department?: string
+    maxStudents?: number
+}
+
+interface StudentDoc {
+    _id: string
+    name: string
+    email: string
+    department?: string
+    assignedGuideId?: string | null
+    assignedGuideName?: string | null
+}
 
 export default function AssignGuidePage() {
     const { proposals, refreshProposals } = useProposals()
     const [guides, setGuides] = React.useState<GuideDoc[]>([])
+    const [students, setStudents] = React.useState<StudentDoc[]>([])
     const [loading, setLoading] = React.useState(true)
     const [searchQuery, setSearchQuery] = React.useState("")
     const [filterStatus, setFilterStatus] = React.useState("all")
+    const [filterGuide, setFilterGuide] = React.useState("all")
     const [rowSelections, setRowSelections] = React.useState<Record<string, string>>({})
     const [savedRows, setSavedRows] = React.useState<Set<string>>(new Set())
     const [savingRows, setSavingRows] = React.useState<Set<string>>(new Set())
+    const [loadError, setLoadError] = React.useState("")
 
-    React.useEffect(() => {
-        fetch("/api/users?role=guide")
-            .then((r) => r.json())
-            .then(setGuides)
-            .catch(console.error)
-            .finally(() => setLoading(false))
+    const loadData = React.useCallback(async () => {
+        setLoading(true)
+        setLoadError("")
+        try {
+            const [guideRes, studentRes] = await Promise.all([
+                fetch("/api/users?role=guide"),
+                fetch("/api/users?role=student"),
+            ])
+
+            if (guideRes.ok) {
+                const g: GuideDoc[] = await guideRes.json()
+                setGuides(g)
+            } else {
+                setLoadError("Failed to load guides")
+            }
+            if (studentRes.ok) {
+                const s: StudentDoc[] = await studentRes.json()
+                setStudents(s)
+            } else {
+                setLoadError("Failed to load students")
+            }
+        } catch (error) {
+            console.error("Failed to load assignment data:", error)
+            setLoadError("Network error. Please check your connection and try again.")
+        } finally {
+            setLoading(false)
+        }
     }, [])
 
-    // Initialize selections from existing proposals
+    React.useEffect(() => {
+        loadData()
+    }, [loadData])
+
+    const proposalsByEmail = React.useMemo(() => {
+        const map: Record<string, typeof proposals> = {}
+        for (const p of proposals) {
+            const key = p.studentEmail.toLowerCase()
+            if (!map[key]) map[key] = []
+            map[key].push(p)
+        }
+        return map
+    }, [proposals])
+
     React.useEffect(() => {
         const init: Record<string, string> = {}
-        for (const p of proposals) {
-            if (p.supervisor) {
-                const g = guides.find((g) => g.name === p.supervisor)
-                if (g) init[p._id] = g._id
+        for (const s of students) {
+            if (s.assignedGuideId) {
+                init[s._id] = s.assignedGuideId
+                continue
+            }
+            const studentProposals = proposalsByEmail[s.email.toLowerCase()] ?? []
+            const firstWithGuide = studentProposals.find((p) => p.supervisor)
+            if (firstWithGuide?.supervisor) {
+                const g = guides.find((guide) => guide.name === firstWithGuide.supervisor)
+                if (g) init[s._id] = g._id
             }
         }
         setRowSelections(init)
-    }, [proposals, guides])
+    }, [students, guides, proposalsByEmail])
 
-    // Only show approved/pending proposals (ones that should have guides)
-    const assignable = proposals.filter((p) => p.status === "approved" || p.status === "pending")
+    const guideLoadMap = React.useMemo(() => {
+        const counts: Record<string, number> = {}
+        for (const s of students) {
+            const gid = s.assignedGuideId
+            if (gid) counts[gid] = (counts[gid] ?? 0) + 1
+        }
+        return counts
+    }, [students])
 
-    const assignedCount = assignable.filter((p) => p.supervisor !== null).length
-    const unassignedCount = assignable.length - assignedCount
+    const assignedCount = students.filter((s) => s.assignedGuideId || s.assignedGuideName).length
+    const unassignedCount = students.length - assignedCount
 
-    const filtered = assignable.filter((p) => {
+    const filtered = students.filter((s) => {
         const q = searchQuery.toLowerCase()
-        const matchesSearch = p.studentName.toLowerCase().includes(q) || p.title.toLowerCase().includes(q) || p.studentEmail.toLowerCase().includes(q)
+        const proposalsForStudent = proposalsByEmail[s.email.toLowerCase()] ?? []
+        const latestProposal = proposalsForStudent[0]
+        const matchesSearch =
+            s.name.toLowerCase().includes(q) ||
+            s.email.toLowerCase().includes(q) ||
+            (latestProposal?.title ?? "").toLowerCase().includes(q)
+
         if (!matchesSearch) return false
-        if (filterStatus === "assigned") return p.supervisor !== null
-        if (filterStatus === "unassigned") return p.supervisor === null
+
+        const hasGuide = Boolean(s.assignedGuideId || s.assignedGuideName)
+        if (filterStatus === "assigned" && !hasGuide) return false
+        if (filterStatus === "unassigned" && hasGuide) return false
+
+        if (filterGuide !== "all") {
+            if ((s.assignedGuideId ?? "") !== filterGuide) return false
+        }
+
         return true
     })
 
-    function handleSelectGuide(proposalId: string, guideId: string) {
-        setRowSelections((prev) => ({ ...prev, [proposalId]: guideId }))
-        setSavedRows((prev) => { const next = new Set(prev); next.delete(proposalId); return next })
+    function handleSelectGuide(studentId: string, guideId: string) {
+        setRowSelections((prev) => ({ ...prev, [studentId]: guideId }))
+        setSavedRows((prev) => {
+            const next = new Set(prev)
+            next.delete(studentId)
+            return next
+        })
     }
 
-    async function handleAssign(proposalId: string) {
-        const guideId = rowSelections[proposalId]
+    async function syncStudentProposals(student: StudentDoc, guide: GuideDoc | null) {
+        const studentProposals = proposalsByEmail[student.email.toLowerCase()] ?? []
+        if (studentProposals.length === 0) return
+
+        await Promise.all(
+            studentProposals.map((p) =>
+                fetch(`/api/proposals/${p._id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        supervisor: guide ? guide.name : null,
+                        guideId: guide ? guide._id : null,
+                    }),
+                })
+            )
+        )
+    }
+
+    async function handleAssign(student: StudentDoc) {
+        const guideId = rowSelections[student._id]
         if (!guideId) return
         const guide = guides.find((g) => g._id === guideId)
         if (!guide) return
 
-        setSavingRows((prev) => new Set(prev).add(proposalId))
+        setSavingRows((prev) => new Set(prev).add(student._id))
         try {
-            const res = await fetch(`/api/proposals/${proposalId}`, {
+            const res = await fetch(`/api/users/${student._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ supervisor: guide.name, guideId: guide._id }),
+                body: JSON.stringify({
+                    assignedGuideId: guide._id,
+                    assignedGuideName: guide.name,
+                }),
             })
+
             if (res.ok) {
+                await syncStudentProposals(student, guide)
                 await refreshProposals()
-                setSavedRows((prev) => new Set(prev).add(proposalId))
-                setTimeout(() => setSavedRows((prev) => { const next = new Set(prev); next.delete(proposalId); return next }), 2000)
+                setStudents((prev) =>
+                    prev.map((s) =>
+                        s._id === student._id
+                            ? { ...s, assignedGuideId: guide._id, assignedGuideName: guide.name }
+                            : s
+                    )
+                )
+                setSavedRows((prev) => new Set(prev).add(student._id))
+                setTimeout(() => {
+                    setSavedRows((prev) => {
+                        const next = new Set(prev)
+                        next.delete(student._id)
+                        return next
+                    })
+                }, 2000)
             }
-        } catch (err) { console.error(err) }
-        finally { setSavingRows((prev) => { const next = new Set(prev); next.delete(proposalId); return next }) }
+        } catch (error) {
+            console.error("Failed to assign guide:", error)
+        } finally {
+            setSavingRows((prev) => {
+                const next = new Set(prev)
+                next.delete(student._id)
+                return next
+            })
+        }
     }
 
-    async function handleUnassign(proposalId: string) {
-        setSavingRows((prev) => new Set(prev).add(proposalId))
+    async function handleUnassign(student: StudentDoc) {
+        setSavingRows((prev) => new Set(prev).add(student._id))
         try {
-            const res = await fetch(`/api/proposals/${proposalId}`, {
+            const res = await fetch(`/api/users/${student._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ supervisor: null, guideId: null }),
+                body: JSON.stringify({
+                    assignedGuideId: null,
+                    assignedGuideName: null,
+                }),
             })
+
             if (res.ok) {
+                await syncStudentProposals(student, null)
                 await refreshProposals()
-                setRowSelections((prev) => { const next = { ...prev }; delete next[proposalId]; return next })
+                setStudents((prev) =>
+                    prev.map((s) =>
+                        s._id === student._id
+                            ? { ...s, assignedGuideId: null, assignedGuideName: null }
+                            : s
+                    )
+                )
+                setRowSelections((prev) => {
+                    const next = { ...prev }
+                    delete next[student._id]
+                    return next
+                })
             }
-        } catch (err) { console.error(err) }
-        finally { setSavingRows((prev) => { const next = new Set(prev); next.delete(proposalId); return next }) }
+        } catch (error) {
+            console.error("Failed to unassign guide:", error)
+        } finally {
+            setSavingRows((prev) => {
+                const next = new Set(prev)
+                next.delete(student._id)
+                return next
+            })
+        }
     }
 
     if (loading) {
-        return <div className="flex items-center justify-center min-h-96"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
+        return (
+            <div className="flex items-center justify-center min-h-96">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-96 gap-4">
+                <AlertTriangle className="w-10 h-10 text-rose-400" />
+                <p className="text-sm text-slate-600">{loadError}</p>
+                <Button onClick={loadData} className="bg-blue-500 hover:bg-blue-600 text-white">
+                    Retry
+                </Button>
+            </div>
+        )
     }
 
     return (
@@ -109,7 +272,7 @@ export default function AssignGuidePage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Assign Supervisor</h1>
-                    <p className="text-sm text-slate-500 mt-1">Manage supervisor assignments for students and projects</p>
+                    <p className="text-sm text-slate-500 mt-1">Assign or reassign guides for every student from one place.</p>
                 </div>
             </div>
 
@@ -140,10 +303,10 @@ export default function AssignGuidePage() {
                         <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Search Students</Label>
                         <div className="relative">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input placeholder="Search by student name or project title..." className="pl-9 bg-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                            <Input placeholder="Search by student, email, or project title..." className="pl-9 bg-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         </div>
                     </div>
-                    <div className="w-full md:w-64 space-y-1.5">
+                    <div className="w-full md:w-56 space-y-1.5">
                         <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Status</Label>
                         <Select value={filterStatus} onValueChange={setFilterStatus}>
                             <SelectTrigger className="bg-white"><SelectValue placeholder="All Students" /></SelectTrigger>
@@ -151,6 +314,18 @@ export default function AssignGuidePage() {
                                 <SelectItem value="all">All Students</SelectItem>
                                 <SelectItem value="assigned">Assigned</SelectItem>
                                 <SelectItem value="unassigned">Unassigned</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="w-full md:w-64 space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Guide</Label>
+                        <Select value={filterGuide} onValueChange={setFilterGuide}>
+                            <SelectTrigger className="bg-white"><SelectValue placeholder="All Guides" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Guides</SelectItem>
+                                {guides.map((guide) => (
+                                    <SelectItem key={guide._id} value={guide._id}>{guide.name}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -165,49 +340,56 @@ export default function AssignGuidePage() {
                         <Table>
                             <TableHeader className="bg-slate-50/80">
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="min-w-48 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Student</TableHead>
+                                    <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Student</TableHead>
                                     <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Project Title</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Current Supervisor</TableHead>
-                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Deadline</TableHead>
-                                    <TableHead className="min-w-52 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Assign Supervisor</TableHead>
-                                    <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-28">Actions</TableHead>
+                                    <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Assign Supervisor</TableHead>
+                                    <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-32">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filtered.length === 0 ? (
-                                    <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-400">No students found.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-slate-400">No students found.</TableCell></TableRow>
                                 ) : (
-                                    filtered.map((p) => {
-                                        const isSaved = savedRows.has(p._id)
-                                        const isSaving = savingRows.has(p._id)
-                                        const currentSelection = rowSelections[p._id] ?? ""
-                                        const currentGuide = guides.find((g) => g.name === p.supervisor)
+                                    filtered.map((student) => {
+                                        const isSaved = savedRows.has(student._id)
+                                        const isSaving = savingRows.has(student._id)
+                                        const currentSelection = rowSelections[student._id] ?? ""
+                                        const currentGuide = student.assignedGuideId ? guides.find((g) => g._id === student.assignedGuideId) : null
                                         const hasChanged = currentSelection !== (currentGuide?._id ?? "")
+                                        const studentProposals = proposalsByEmail[student.email.toLowerCase()] ?? []
+                                        const latestProposal = studentProposals[0]
 
                                         return (
-                                            <TableRow key={p._id} className="hover:bg-slate-50 border-slate-100">
+                                            <TableRow key={student._id} className="hover:bg-slate-50 border-slate-100">
                                                 <TableCell className="py-4">
                                                     <div className="flex flex-col">
-                                                        <span className="font-semibold text-sm text-slate-900">{p.studentName}</span>
-                                                        <span className="text-xs text-slate-500">{p.studentEmail}</span>
+                                                        <span className="font-semibold text-sm text-slate-900">{student.name}</span>
+                                                        <span className="text-xs text-slate-500">{student.email}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="py-4"><span className="text-sm text-slate-700">{p.title}</span></TableCell>
+                                                <TableCell className="py-4"><span className="text-sm text-slate-700">{latestProposal?.title ?? "No proposal yet"}</span></TableCell>
                                                 <TableCell className="py-4">
-                                                    {p.supervisor ? (
-                                                        <span className="inline-flex items-center text-xs font-medium text-emerald-700">{p.supervisor}</span>
+                                                    {student.assignedGuideName ? (
+                                                        <span className="inline-flex items-center text-xs font-medium text-emerald-700">{student.assignedGuideName}</span>
                                                     ) : (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">Not Assigned</span>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="py-4"><span className="text-sm text-slate-700">{p.deadline ?? "-"}</span></TableCell>
                                                 <TableCell className="py-4">
-                                                    <Select value={currentSelection} onValueChange={(v) => handleSelectGuide(p._id, v)}>
+                                                    <Select value={currentSelection} onValueChange={(v) => handleSelectGuide(student._id, v)}>
                                                         <SelectTrigger className="w-full h-8 text-xs bg-white"><SelectValue placeholder="Select Supervisor" /></SelectTrigger>
                                                         <SelectContent>
-                                                            {guides.map((g) => (
-                                                                <SelectItem key={g._id} value={g._id}>{g.name} ({g.department || "N/A"})</SelectItem>
-                                                            ))}
+                                                            {guides.map((guide) => {
+                                                                const count = guideLoadMap[guide._id] ?? 0
+                                                                const max = guide.maxStudents ?? 5
+                                                                const isAtCapacity = count >= max && guide._id !== student.assignedGuideId
+                                                                return (
+                                                                    <SelectItem key={guide._id} value={guide._id} disabled={isAtCapacity}>
+                                                                        {guide.name} ({count}/{max})
+                                                                    </SelectItem>
+                                                                )
+                                                            })}
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>
@@ -216,14 +398,20 @@ export default function AssignGuidePage() {
                                                         <Button
                                                             size="sm"
                                                             className={`w-full text-xs ${isSaved ? "bg-emerald-500 hover:bg-emerald-600" : "bg-blue-500 hover:bg-blue-600"}`}
-                                                            onClick={() => handleAssign(p._id)}
-                                                            disabled={!currentSelection || isSaving}
+                                                            onClick={() => handleAssign(student)}
+                                                            disabled={!currentSelection || isSaving || !hasChanged}
                                                         >
                                                             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-                                                            {isSaved ? (<><Check className="w-3.5 h-3.5 mr-1" /> Saved</>) : p.supervisor && !hasChanged ? "Assigned" : "Assign"}
+                                                            {isSaved ? (<><Check className="w-3.5 h-3.5 mr-1" /> Saved</>) : "Assign"}
                                                         </Button>
-                                                        {p.supervisor && (
-                                                            <Button size="sm" variant="outline" className="w-full text-xs text-rose-600 border-rose-200 hover:bg-rose-50" onClick={() => handleUnassign(p._id)} disabled={isSaving}>
+                                                        {student.assignedGuideId && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="w-full text-xs text-rose-600 border-rose-200 hover:bg-rose-50"
+                                                                onClick={() => handleUnassign(student)}
+                                                                disabled={isSaving}
+                                                            >
                                                                 Unassign
                                                             </Button>
                                                         )}

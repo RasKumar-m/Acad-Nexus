@@ -10,11 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Users, CheckCircle2, AlertTriangle, Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react"
 import { useProposals } from "@/lib/proposal-context"
+import { ActivityHeatmap } from "@/components/activity-heatmap"
+import { validateName, validateEmail, validatePassword } from "@/lib/validation"
 
 interface UserDoc {
     _id: string
     name: string
     email: string
+    assignedGuideId?: string | null
+    assignedGuideName?: string | null
     department?: string
     createdAt: string
 }
@@ -33,6 +37,7 @@ export default function ManageStudentsPage() {
     const [addPassword, setAddPassword] = React.useState("")
     const [addDept, setAddDept] = React.useState("Computer Science")
     const [saving, setSaving] = React.useState(false)
+    const [formError, setFormError] = React.useState("")
 
     // Edit dialog
     const [editOpen, setEditOpen] = React.useState(false)
@@ -44,6 +49,11 @@ export default function ManageStudentsPage() {
     // Delete dialog
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [deleteTarget, setDeleteTarget] = React.useState<UserDoc | null>(null)
+    const [activityOpen, setActivityOpen] = React.useState(false)
+    const [activityTarget, setActivityTarget] = React.useState<UserDoc | null>(null)
+    const [activityMap, setActivityMap] = React.useState<Record<string, number>>({})
+    const [activityStreak, setActivityStreak] = React.useState({ current: 0, longest: 0, totalActiveDays: 0 })
+    const [activityLoading, setActivityLoading] = React.useState(false)
 
     React.useEffect(() => {
         fetch("/api/users?role=student")
@@ -59,7 +69,7 @@ export default function ManageStudentsPage() {
     }
 
     const totalStudents = students.length
-    const assignedCount = students.filter((s) => getStudentProposal(s.email)?.supervisor).length
+    const assignedCount = students.filter((s) => s.assignedGuideName || getStudentProposal(s.email)?.supervisor).length
     const unassignedCount = totalStudents - assignedCount
 
     const filteredStudents = students.filter((s) => {
@@ -71,7 +81,17 @@ export default function ManageStudentsPage() {
     })
 
     async function handleAddStudent() {
-        if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) return
+        if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) {
+            setFormError("All fields are required")
+            return
+        }
+        const nameErr = validateName(addName)
+        if (nameErr) { setFormError(nameErr); return }
+        const emailErr = validateEmail(addEmail)
+        if (emailErr) { setFormError(emailErr); return }
+        const passErr = validatePassword(addPassword, addName, addEmail)
+        if (passErr) { setFormError(passErr); return }
+        setFormError("")
         setSaving(true)
         try {
             const res = await fetch("/api/users", {
@@ -84,8 +104,11 @@ export default function ManageStudentsPage() {
                 setStudents((prev) => [newUser, ...prev])
                 setAddName(""); setAddEmail(""); setAddPassword(""); setAddDept("Computer Science")
                 setAddOpen(false)
+            } else {
+                const payload = await res.json().catch(() => ({}))
+                setFormError(payload.error ?? "Failed to add student")
             }
-        } catch (err) { console.error(err) }
+        } catch (err) { console.error(err); setFormError("Network error. Please try again.") }
         finally { setSaving(false) }
     }
 
@@ -98,7 +121,15 @@ export default function ManageStudentsPage() {
     }
 
     async function handleEditStudent() {
-        if (!editStudent || !editName.trim() || !editEmail.trim()) return
+        if (!editStudent || !editName.trim() || !editEmail.trim()) {
+            setFormError("Name and email are required")
+            return
+        }
+        const nameErr = validateName(editName)
+        if (nameErr) { setFormError(nameErr); return }
+        const emailErr = validateEmail(editEmail)
+        if (emailErr) { setFormError(emailErr); return }
+        setFormError("")
         setSaving(true)
         try {
             const res = await fetch(`/api/users/${editStudent._id}`, {
@@ -110,8 +141,11 @@ export default function ManageStudentsPage() {
                 const updated = await res.json()
                 setStudents((prev) => prev.map((s) => s._id === editStudent._id ? updated : s))
                 setEditOpen(false); setEditStudent(null)
+            } else {
+                const payload = await res.json().catch(() => ({}))
+                setFormError(payload.error ?? "Failed to update student")
             }
-        } catch (err) { console.error(err) }
+        } catch (err) { console.error(err); setFormError("Network error. Please try again.") }
         finally { setSaving(false) }
     }
 
@@ -129,6 +163,30 @@ export default function ManageStudentsPage() {
                 setDeleteOpen(false); setDeleteTarget(null)
             }
         } catch (err) { console.error(err) }
+    }
+
+    async function openActivity(student: UserDoc) {
+        setActivityTarget(student)
+        setActivityMap({})
+        setActivityStreak({ current: 0, longest: 0, totalActiveDays: 0 })
+        setActivityLoading(true)
+        setActivityOpen(true)
+
+        try {
+            const res = await fetch(`/api/activity?studentEmail=${encodeURIComponent(student.email)}&days=120`)
+            if (!res.ok) return
+            const data = await res.json()
+            setActivityMap(data.activity ?? {})
+            setActivityStreak({
+                current: data.currentStreak ?? 0,
+                longest: data.longestStreak ?? 0,
+                totalActiveDays: data.totalActiveDays ?? 0,
+            })
+        } catch (error) {
+            console.error("Failed to load activity", error)
+        } finally {
+            setActivityLoading(false)
+        }
     }
 
     if (loading) {
@@ -204,7 +262,7 @@ export default function ManageStudentsPage() {
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Department</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Supervisor</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Project Title</TableHead>
-                                    <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-28">Actions</TableHead>
+                                    <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-36">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -213,6 +271,7 @@ export default function ManageStudentsPage() {
                                 ) : (
                                     filteredStudents.map((student) => {
                                         const proposal = getStudentProposal(student.email)
+                                        const supervisor = student.assignedGuideName || proposal?.supervisor
                                         return (
                                             <TableRow key={student._id} className="hover:bg-slate-50 border-slate-100">
                                                 <TableCell className="py-4">
@@ -223,8 +282,8 @@ export default function ManageStudentsPage() {
                                                 </TableCell>
                                                 <TableCell className="py-4"><span className="text-sm text-slate-700">{student.department || "-"}</span></TableCell>
                                                 <TableCell className="py-4">
-                                                    {proposal?.supervisor ? (
-                                                        <span className="inline-flex items-center text-xs font-medium text-emerald-700">{proposal.supervisor}</span>
+                                                    {supervisor ? (
+                                                        <span className="inline-flex items-center text-xs font-medium text-emerald-700">{supervisor}</span>
                                                     ) : (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">Not Assigned</span>
                                                     )}
@@ -232,6 +291,9 @@ export default function ManageStudentsPage() {
                                                 <TableCell className="py-4"><span className="text-sm text-slate-700">{proposal?.title || "-"}</span></TableCell>
                                                 <TableCell className="text-right py-4">
                                                     <div className="flex justify-end gap-1">
+                                                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-slate-600 hover:text-slate-800 hover:bg-slate-100" onClick={() => openActivity(student)}>
+                                                            Activity
+                                                        </Button>
                                                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-50" onClick={() => openEditDialog(student)}>
                                                             <Pencil className="w-4 h-4" /><span className="sr-only">Edit</span>
                                                         </Button>
@@ -255,9 +317,21 @@ export default function ManageStudentsPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle>Add Student</DialogTitle></DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <div className="grid gap-2"><Label>Full Name</Label><Input placeholder="Ahmed Saeed" value={addName} onChange={(e) => setAddName(e.target.value)} /></div>
-                        <div className="grid gap-2"><Label>Email</Label><Input type="email" placeholder="ahmed@example.com" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} /></div>
-                        <div className="grid gap-2"><Label>Password</Label><Input type="password" placeholder="••••••••" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} /></div>
+                        <div className="grid gap-1.5">
+                            <Label>Full Name</Label>
+                            <Input placeholder="Ahmed Saeed" value={addName} onChange={(e) => { setAddName(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Letters, spaces, apostrophes, and hyphens only (3-60 chars)</p>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Email</Label>
+                            <Input type="email" placeholder="ahmed@example.com" value={addEmail} onChange={(e) => { setAddEmail(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Must be a valid email (e.g. user@domain.com)</p>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Password</Label>
+                            <Input type="password" placeholder="••••••••" value={addPassword} onChange={(e) => { setAddPassword(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">8-64 chars with uppercase, lowercase, number, and special character</p>
+                        </div>
                         <div className="grid gap-2">
                             <Label>Department</Label>
                             <Select value={addDept} onValueChange={setAddDept}>
@@ -269,6 +343,7 @@ export default function ManageStudentsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        {formError && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">{formError}</p>}
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0">
                         <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
@@ -284,8 +359,16 @@ export default function ManageStudentsPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle>Edit Student</DialogTitle></DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <div className="grid gap-2"><Label>Full Name</Label><Input value={editName} onChange={(e) => setEditName(e.target.value)} /></div>
-                        <div className="grid gap-2"><Label>Email</Label><Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} /></div>
+                        <div className="grid gap-1.5">
+                            <Label>Full Name</Label>
+                            <Input value={editName} onChange={(e) => { setEditName(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Letters, spaces, apostrophes, and hyphens only (3-60 chars)</p>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Email</Label>
+                            <Input type="email" value={editEmail} onChange={(e) => { setEditEmail(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Must be a valid email (e.g. user@domain.com)</p>
+                        </div>
                         <div className="grid gap-2">
                             <Label>Department</Label>
                             <Select value={editDept} onValueChange={setEditDept}>
@@ -297,6 +380,7 @@ export default function ManageStudentsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        {formError && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">{formError}</p>}
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0">
                         <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
@@ -315,6 +399,36 @@ export default function ManageStudentsPage() {
                     <DialogFooter className="gap-2 sm:gap-0">
                         <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
                         <Button variant="destructive" onClick={handleDeleteStudent}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader><DialogTitle>Student Activity: {activityTarget?.name}</DialogTitle></DialogHeader>
+                    {activityLoading ? (
+                        <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+                    ) : (
+                        <div className="space-y-3">
+                            <ActivityHeatmap activity={activityMap} days={120} title="Submission Consistency" />
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                    <p className="text-slate-500">Current Streak</p>
+                                    <p className="font-semibold text-slate-800">{activityStreak.current} day{activityStreak.current === 1 ? "" : "s"}</p>
+                                </div>
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                    <p className="text-slate-500">Longest Streak</p>
+                                    <p className="font-semibold text-slate-800">{activityStreak.longest} day{activityStreak.longest === 1 ? "" : "s"}</p>
+                                </div>
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                    <p className="text-slate-500">Active Days</p>
+                                    <p className="font-semibold text-slate-800">{activityStreak.totalActiveDays} day{activityStreak.totalActiveDays === 1 ? "" : "s"}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Close</Button></DialogClose>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

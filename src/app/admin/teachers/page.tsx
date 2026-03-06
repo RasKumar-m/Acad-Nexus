@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Users, CheckCircle2, AlertTriangle, Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react"
+import { validateName, validateEmail, validatePassword } from "@/lib/validation"
 
 interface TeacherDoc {
     _id: string
@@ -34,6 +35,7 @@ export default function ManageTeachersPage() {
     const [addExpertise, setAddExpertise] = React.useState("Database Systems")
     const [addMaxStudents, setAddMaxStudents] = React.useState(5)
     const [saving, setSaving] = React.useState(false)
+    const [formError, setFormError] = React.useState("")
 
     const [editOpen, setEditOpen] = React.useState(false)
     const [editTeacher, setEditTeacher] = React.useState<TeacherDoc | null>(null)
@@ -66,7 +68,17 @@ export default function ManageTeachersPage() {
     })
 
     async function handleAddTeacher() {
-        if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) return
+        if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) {
+            setFormError("All fields are required")
+            return
+        }
+        const nameErr = validateName(addName)
+        if (nameErr) { setFormError(nameErr); return }
+        const emailErr = validateEmail(addEmail)
+        if (emailErr) { setFormError(emailErr); return }
+        const passErr = validatePassword(addPassword, addName, addEmail)
+        if (passErr) { setFormError(passErr); return }
+        setFormError("")
         setSaving(true)
         try {
             const res = await fetch("/api/users", {
@@ -79,8 +91,11 @@ export default function ManageTeachersPage() {
                 setTeachers((prev) => [newUser, ...prev])
                 setAddName(""); setAddEmail(""); setAddPassword(""); setAddDept("Electrical Engineering"); setAddExpertise("Database Systems"); setAddMaxStudents(5)
                 setAddOpen(false)
+            } else {
+                const payload = await res.json().catch(() => ({}))
+                setFormError(payload.error ?? "Failed to add teacher")
             }
-        } catch (err) { console.error(err) }
+        } catch (err) { console.error(err); setFormError("Network error. Please try again.") }
         finally { setSaving(false) }
     }
 
@@ -95,7 +110,15 @@ export default function ManageTeachersPage() {
     }
 
     async function handleEditTeacher() {
-        if (!editTeacher || !editName.trim() || !editEmail.trim()) return
+        if (!editTeacher || !editName.trim() || !editEmail.trim()) {
+            setFormError("Name and email are required")
+            return
+        }
+        const nameErr = validateName(editName)
+        if (nameErr) { setFormError(nameErr); return }
+        const emailErr = validateEmail(editEmail)
+        if (emailErr) { setFormError(emailErr); return }
+        setFormError("")
         setSaving(true)
         try {
             const res = await fetch(`/api/users/${editTeacher._id}`, {
@@ -107,8 +130,11 @@ export default function ManageTeachersPage() {
                 const updated = await res.json()
                 setTeachers((prev) => prev.map((t) => t._id === editTeacher._id ? updated : t))
                 setEditOpen(false); setEditTeacher(null)
+            } else {
+                const payload = await res.json().catch(() => ({}))
+                setFormError(payload.error ?? "Failed to update teacher")
             }
-        } catch (err) { console.error(err) }
+        } catch (err) { console.error(err); setFormError("Network error. Please try again.") }
         finally { setSaving(false) }
     }
 
@@ -240,9 +266,21 @@ export default function ManageTeachersPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle>Add Teacher</DialogTitle></DialogHeader>
                     <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-                        <div className="grid gap-2"><Label>Full Name</Label><Input placeholder="Dr. Aneela" value={addName} onChange={(e) => setAddName(e.target.value)} /></div>
-                        <div className="grid gap-2"><Label>Email</Label><Input type="email" placeholder="aneela@gmail.com" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} /></div>
-                        <div className="grid gap-2"><Label>Password</Label><Input type="password" placeholder="••••••••" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} /></div>
+                        <div className="grid gap-1.5">
+                            <Label>Full Name</Label>
+                            <Input placeholder="Dr. Aneela" value={addName} onChange={(e) => { setAddName(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Letters, spaces, apostrophes, and hyphens only (3-60 chars)</p>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Email</Label>
+                            <Input type="email" placeholder="aneela@gmail.com" value={addEmail} onChange={(e) => { setAddEmail(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Must be a valid email (e.g. user@domain.com)</p>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Password</Label>
+                            <Input type="password" placeholder="••••••••" value={addPassword} onChange={(e) => { setAddPassword(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">8-64 chars with uppercase, lowercase, number, and special character</p>
+                        </div>
                         <div className="grid gap-2">
                             <Label>Department</Label>
                             <Select value={addDept} onValueChange={setAddDept}>
@@ -271,6 +309,7 @@ export default function ManageTeachersPage() {
                             </Select>
                         </div>
                         <div className="grid gap-2"><Label>Max Students</Label><Input type="number" value={addMaxStudents} onChange={(e) => setAddMaxStudents(Number(e.target.value))} min={1} /></div>
+                        {formError && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">{formError}</p>}
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0 mt-2">
                         <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
@@ -286,8 +325,16 @@ export default function ManageTeachersPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle>Edit Teacher</DialogTitle></DialogHeader>
                     <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
-                        <div className="grid gap-2"><Label>Full Name</Label><Input value={editName} onChange={(e) => setEditName(e.target.value)} /></div>
-                        <div className="grid gap-2"><Label>Email</Label><Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} /></div>
+                        <div className="grid gap-1.5">
+                            <Label>Full Name</Label>
+                            <Input value={editName} onChange={(e) => { setEditName(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Letters, spaces, apostrophes, and hyphens only (3-60 chars)</p>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Email</Label>
+                            <Input type="email" value={editEmail} onChange={(e) => { setEditEmail(e.target.value); setFormError("") }} />
+                            <p className="text-[11px] text-slate-400">Must be a valid email (e.g. user@domain.com)</p>
+                        </div>
                         <div className="grid gap-2">
                             <Label>Department</Label>
                             <Select value={editDept} onValueChange={setEditDept}>
@@ -316,6 +363,7 @@ export default function ManageTeachersPage() {
                             </Select>
                         </div>
                         <div className="grid gap-2"><Label>Max Students</Label><Input type="number" value={editMaxStudents} onChange={(e) => setEditMaxStudents(Number(e.target.value))} min={1} /></div>
+                        {formError && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">{formError}</p>}
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0 mt-2">
                         <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
