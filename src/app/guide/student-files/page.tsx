@@ -23,22 +23,22 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import {
-    Download,
+    ExternalLink,
     Search,
     AlertTriangle,
     FileText,
-    FileImage,
     FileCode,
     LayoutGrid,
     List,
     Presentation,
+    Loader2,
 } from "lucide-react"
 
-// ─── Types & Mock Data ──────────────────────────────────────────────
-type FileCategory = "report" | "presentation" | "code" | "image" | "other"
+// ─── Types ──────────────────────────────────────────────────────────
+type FileCategory = "report" | "presentation" | "code"
 
 interface StudentFileItem {
-    id: number
+    _id: string
     fileName: string
     studentName: string
     category: FileCategory
@@ -46,138 +46,20 @@ interface StudentFileItem {
     url: string
 }
 
-const allFiles: StudentFileItem[] = [
-    {
-        id: 1,
-        fileName: "Zeeshan Khan (1).docx",
-        studentName: "Ahmed Saeed",
-        category: "report",
-        uploadDate: "09/01/2026",
-        url: "#",
-    },
-    {
-        id: 2,
-        fileName: "Solar Hybird Invertor Parts List (1) (1) (3).pdf",
-        studentName: "Hira Aslam",
-        category: "report",
-        uploadDate: "08/01/2026",
-        url: "#",
-    },
-    {
-        id: 3,
-        fileName: "Solar Hybird Invertor Parts List (1) (1).pdf",
-        studentName: "Laiba Noor",
-        category: "report",
-        uploadDate: "08/01/2026",
-        url: "#",
-    },
-    {
-        id: 4,
-        fileName: "FYP_Presentation_Final.pptx",
-        studentName: "Areeba Fatima",
-        category: "presentation",
-        uploadDate: "07/25/2026",
-        url: "#",
-    },
-    {
-        id: 5,
-        fileName: "ERD_Diagram_v2.png",
-        studentName: "Maryam Iqbal",
-        category: "image",
-        uploadDate: "07/20/2026",
-        url: "#",
-    },
-    {
-        id: 6,
-        fileName: "backend_api_routes.zip",
-        studentName: "Bilal Khan",
-        category: "code",
-        uploadDate: "08/15/2026",
-        url: "#",
-    },
-    {
-        id: 7,
-        fileName: "Progress_Report_March.pdf",
-        studentName: "Fatima Noor",
-        category: "report",
-        uploadDate: "09/03/2026",
-        url: "#",
-    },
-    {
-        id: 8,
-        fileName: "LMS_Architecture.png",
-        studentName: "Hira Aslam",
-        category: "image",
-        uploadDate: "07/10/2026",
-        url: "#",
-    },
-    {
-        id: 9,
-        fileName: "Midterm_Demo_Slides.pptx",
-        studentName: "Zeeshan Ali",
-        category: "presentation",
-        uploadDate: "08/20/2026",
-        url: "#",
-    },
-    {
-        id: 10,
-        fileName: "React_Components.tsx",
-        studentName: "Ahmed Saeed",
-        category: "code",
-        uploadDate: "09/02/2026",
-        url: "#",
-    },
-]
-
 // ─── Helpers ────────────────────────────────────────────────────────
 function getFileExtension(name: string): string {
     const parts = name.split(".")
     return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : "FILE"
 }
 
-function getCategoryIcon(category: FileCategory, size: "sm" | "lg" = "sm") {
-    const cls = size === "lg" ? "w-8 h-8" : "w-5 h-5"
-    switch (category) {
-        case "report": {
-            const ext = "PDF"
-            // docx files get blue, pdf get red-orange
-            return { icon: <FileText className={cls} />, color: ext === "PDF" ? "text-red-500" : "text-blue-500" }
-        }
-        case "presentation":
-            return { icon: <Presentation className={cls} />, color: "text-orange-500" }
-        case "code":
-            return { icon: <FileCode className={cls} />, color: "text-purple-600" }
-        case "image":
-            return { icon: <FileImage className={cls} />, color: "text-pink-500" }
-        default:
-            return { icon: <FileText className={cls} />, color: "text-slate-400" }
-    }
-}
-
 function getFileIconColor(fileName: string): string {
     const ext = getFileExtension(fileName).toLowerCase()
     switch (ext) {
-        case "pdf":
-            return "text-red-500"
-        case "docx":
-        case "doc":
-            return "text-blue-600"
-        case "pptx":
-        case "ppt":
-            return "text-orange-500"
-        case "png":
-        case "jpg":
-        case "jpeg":
-        case "svg":
-            return "text-pink-500"
-        case "zip":
-        case "tsx":
-        case "ts":
-        case "js":
-        case "py":
-            return "text-purple-600"
-        default:
-            return "text-slate-400"
+        case "pdf": return "text-red-500"
+        case "docx": case "doc": return "text-blue-600"
+        case "pptx": case "ppt": return "text-orange-500"
+        case "zip": case "rar": case "gz": case "7z": return "text-purple-600"
+        default: return "text-slate-400"
     }
 }
 
@@ -185,26 +67,10 @@ function getFileIcon(fileName: string, size: "sm" | "lg" = "sm") {
     const ext = getFileExtension(fileName).toLowerCase()
     const cls = size === "lg" ? "w-8 h-8" : "w-5 h-5"
     switch (ext) {
-        case "pdf":
-        case "docx":
-        case "doc":
-            return <FileText className={cls} />
-        case "pptx":
-        case "ppt":
-            return <Presentation className={cls} />
-        case "png":
-        case "jpg":
-        case "jpeg":
-        case "svg":
-            return <FileImage className={cls} />
-        case "zip":
-        case "tsx":
-        case "ts":
-        case "js":
-        case "py":
-            return <FileCode className={cls} />
-        default:
-            return <FileText className={cls} />
+        case "pdf": case "docx": case "doc": return <FileText className={cls} />
+        case "pptx": case "ppt": return <Presentation className={cls} />
+        case "zip": case "rar": case "gz": case "7z": return <FileCode className={cls} />
+        default: return <FileText className={cls} />
     }
 }
 
@@ -221,14 +87,43 @@ const metricCards: MetricConfig[] = [
     { label: "Reports", borderColor: "border-l-green-500", textColor: "text-green-600", bgColor: "bg-green-50" },
     { label: "Presentations", borderColor: "border-l-orange-500", textColor: "text-orange-600", bgColor: "bg-orange-50" },
     { label: "Code Files", borderColor: "border-l-purple-500", textColor: "text-purple-600", bgColor: "bg-purple-50" },
-    { label: "Images", borderColor: "border-l-pink-500", textColor: "text-pink-600", bgColor: "bg-pink-50" },
 ]
 
 // ─── Page ───────────────────────────────────────────────────────────
 export default function StudentFilesPage() {
+    const [allFiles, setAllFiles] = React.useState<StudentFileItem[]>([])
+    const [loading, setLoading] = React.useState(true)
     const [searchQuery, setSearchQuery] = React.useState("")
     const [filterType, setFilterType] = React.useState("all")
     const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid")
+
+    // ── Fetch all files from MongoDB ────────────────────────────────
+    React.useEffect(() => {
+        async function load() {
+            try {
+                const res = await fetch("/api/files")
+                if (!res.ok) return
+                const data = await res.json()
+                setAllFiles(
+                    data.map((f: Record<string, unknown>) => ({
+                        _id: String(f._id),
+                        fileName: String(f.fileName),
+                        studentName: String(f.studentName),
+                        category: String(f.category) as FileCategory,
+                        uploadDate: new Date(f.createdAt as string).toLocaleDateString("en-US", {
+                            month: "2-digit",
+                            day: "2-digit",
+                            year: "numeric",
+                        }),
+                        url: String(f.fileUrl),
+                    }))
+                )
+            } finally {
+                setLoading(false)
+            }
+        }
+        load()
+    }, [])
 
     // Filtering
     const filtered = allFiles.filter((f) => {
@@ -246,8 +141,15 @@ export default function StudentFilesPage() {
     const reportCount = filtered.filter((f) => f.category === "report").length
     const presentationCount = filtered.filter((f) => f.category === "presentation").length
     const codeCount = filtered.filter((f) => f.category === "code").length
-    const imageCount = filtered.filter((f) => f.category === "image").length
-    const metricValues = [totalCount, reportCount, presentationCount, codeCount, imageCount]
+    const metricValues = [totalCount, reportCount, presentationCount, codeCount]
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center py-32">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
@@ -258,7 +160,7 @@ export default function StudentFilesPage() {
                         Student Files
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        Manage files shared with and received from students
+                        View and download files uploaded by students
                     </p>
                 </div>
             </div>
@@ -277,7 +179,6 @@ export default function StudentFilesPage() {
                                 <SelectItem value="report">Reports</SelectItem>
                                 <SelectItem value="presentation">Presentations</SelectItem>
                                 <SelectItem value="code">Code Files</SelectItem>
-                                <SelectItem value="image">Images</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -321,7 +222,7 @@ export default function StudentFilesPage() {
             </div>
 
             {/* ─── Metric Cards ───────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {metricCards.map((mc, idx) => (
                     <Card
                         key={mc.label}
@@ -352,42 +253,26 @@ export default function StudentFilesPage() {
                     {filtered.map((file) => {
                         const iconColor = getFileIconColor(file.fileName)
                         const icon = getFileIcon(file.fileName, "lg")
-                        const ext = getFileExtension(file.fileName)
 
                         return (
                             <Card
-                                key={file.id}
+                                key={file._id}
                                 className="shadow-sm border-slate-100 hover:shadow-md transition-shadow"
                             >
                                 <CardContent className="p-6 flex flex-col items-center text-center gap-3">
-                                    {/* File Icon */}
-                                    <div className={`${iconColor} mt-2`}>
-                                        {icon}
-                                    </div>
-
-                                    {/* File Name */}
+                                    <div className={`${iconColor} mt-2`}>{icon}</div>
                                     <h3 className="font-semibold text-sm text-slate-900 line-clamp-2 leading-snug min-h-10">
                                         {file.fileName}
                                     </h3>
-
-                                    {/* Student Name */}
-                                    <p className="text-xs text-slate-500">
-                                        {file.studentName}
-                                    </p>
-
-                                    {/* Date */}
-                                    <p className="text-xs text-slate-400">
-                                        {file.uploadDate}
-                                    </p>
-
-                                    {/* Download Button */}
+                                    <p className="text-xs text-slate-500">{file.studentName}</p>
+                                    <p className="text-xs text-slate-400">{file.uploadDate}</p>
                                     <Button
                                         className="w-full mt-2 gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold"
                                         asChild
                                     >
                                         <a href={file.url} target="_blank" rel="noopener noreferrer">
-                                            <Download className="w-4 h-4" />
-                                            Download
+                                            <ExternalLink className="w-4 h-4" />
+                                            View File
                                         </a>
                                     </Button>
                                 </CardContent>
@@ -426,31 +311,23 @@ export default function StudentFilesPage() {
                                     const ext = getFileExtension(file.fileName)
 
                                     return (
-                                        <TableRow key={file.id} className="hover:bg-slate-50 border-slate-100">
+                                        <TableRow key={file._id} className="hover:bg-slate-50 border-slate-100">
                                             <TableCell className="py-3.5">
                                                 <div className="flex items-center gap-3">
-                                                    <span className={`${iconColor} shrink-0`}>
-                                                        {icon}
-                                                    </span>
+                                                    <span className={`${iconColor} shrink-0`}>{icon}</span>
                                                     <span className="text-sm font-medium text-slate-800 truncate max-w-xs">
                                                         {file.fileName}
                                                     </span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-3.5">
-                                                <span className="text-sm text-slate-700">
-                                                    {file.studentName}
-                                                </span>
+                                                <span className="text-sm text-slate-700">{file.studentName}</span>
                                             </TableCell>
                                             <TableCell className="py-3.5 hidden sm:table-cell">
-                                                <span className="text-sm text-slate-600 font-medium">
-                                                    {ext}
-                                                </span>
+                                                <span className="text-sm text-slate-600 font-medium">{ext}</span>
                                             </TableCell>
                                             <TableCell className="py-3.5 hidden md:table-cell">
-                                                <span className="text-sm text-slate-600">
-                                                    {file.uploadDate}
-                                                </span>
+                                                <span className="text-sm text-slate-600">{file.uploadDate}</span>
                                             </TableCell>
                                             <TableCell className="py-3.5 text-center">
                                                 <Button
@@ -459,8 +336,8 @@ export default function StudentFilesPage() {
                                                     asChild
                                                 >
                                                     <a href={file.url} target="_blank" rel="noopener noreferrer">
-                                                        <Download className="w-3.5 h-3.5" />
-                                                        Download
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                        View
                                                     </a>
                                                 </Button>
                                             </TableCell>

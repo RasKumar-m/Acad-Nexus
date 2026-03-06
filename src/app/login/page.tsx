@@ -11,20 +11,12 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import { useAuth, roleRoutes, type UserRole } from "@/lib/auth-context"
+import { useAuth, roleRoutes } from "@/lib/auth-context"
 
 export default function LoginPage() {
     const { user, login } = useAuth()
     const router = useRouter()
 
-    const [role, setRole] = React.useState<string>("Student")
     const [email, setEmail] = React.useState("")
     const [password, setPassword] = React.useState("")
     const [showPassword, setShowPassword] = React.useState(false)
@@ -52,12 +44,12 @@ export default function LoginPage() {
         }
 
         setIsSubmitting(true)
-        const success = await login(email, password, role as UserRole)
+        const success = await login(email, password)
 
         if (success) {
-            router.replace(roleRoutes[role as UserRole])
+            // Session will update → useEffect above handles redirect
         } else {
-            setError("Invalid email, password, or role. Please try again.")
+            setError("Invalid email or password. Please try again.")
             setIsSubmitting(false)
         }
     }
@@ -66,17 +58,14 @@ export default function LoginPage() {
     function fillDemo(demoRole: string) {
         switch (demoRole) {
             case "Admin":
-                setRole("Admin")
                 setEmail("admin@acad.edu")
                 setPassword("admin123")
                 break
             case "Teacher":
-                setRole("Teacher")
                 setEmail("sana.khan@university.edu")
                 setPassword("guide123")
                 break
             case "Student":
-                setRole("Student")
                 setEmail("ahmed.saeed@student.edu")
                 setPassword("student123")
                 break
@@ -114,23 +103,6 @@ export default function LoginPage() {
                                 {error}
                             </div>
                         )}
-
-                        {/* Role Select */}
-                        <div className="space-y-2">
-                            <Label htmlFor="role" className="text-sm font-semibold text-slate-700">
-                                Select Role
-                            </Label>
-                            <Select value={role} onValueChange={(v) => { setRole(v); setError("") }}>
-                                <SelectTrigger id="role" className="w-full bg-white h-11 border-slate-200 text-slate-700 rounded-lg">
-                                    <SelectValue placeholder="Select a role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Student">Student</SelectItem>
-                                    <SelectItem value="Teacher">Guide / Teacher</SelectItem>
-                                    <SelectItem value="Admin">Admin</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
 
                         {/* Email */}
                         <div className="space-y-2">

@@ -50,15 +50,7 @@ import {
     User,
 } from "lucide-react"
 import { useProposals, type ProposalStatus, type Proposal } from "@/lib/proposal-context"
-
-// ─── Local constants ────────────────────────────────────────────────
-const supervisorsList = [
-    "Dr. Ahmed Raza",
-    "Ms. Ayesha Malik",
-    "Dr. Aneela",
-    "Dr. Usman Ali",
-    "Mr. Bilal Hussain",
-]
+import FileCard from "@/components/FileCard"
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function statusBadge(status: ProposalStatus) {
@@ -69,6 +61,8 @@ function statusBadge(status: ProposalStatus) {
             return <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold">Approved</Badge>
         case "rejected":
             return <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold">Rejected</Badge>
+        case "completed":
+            return <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700 text-xs font-semibold">Completed</Badge>
     }
 }
 
@@ -90,6 +84,14 @@ export default function AdminProjectsPage() {
     const [searchQuery, setSearchQuery] = React.useState("")
     const [filterStatus, setFilterStatus] = React.useState("all")
     const [filterSupervisor, setFilterSupervisor] = React.useState("all")
+    const [supervisorNames, setSupervisorNames] = React.useState<string[]>([])
+
+    React.useEffect(() => {
+        fetch("/api/users?role=guide")
+            .then((r) => r.json())
+            .then((guides: { name: string }[]) => setSupervisorNames(guides.map((g) => g.name)))
+            .catch(console.error)
+    }, [])
 
     // View dialog
     const [viewDialogOpen, setViewDialogOpen] = React.useState(false)
@@ -101,6 +103,7 @@ export default function AdminProjectsPage() {
     const [actionType, setActionType] = React.useState<"approved" | "rejected">("approved")
     const [actionTarget, setActionTarget] = React.useState<Proposal | null>(null)
     const [actionRemark, setActionRemark] = React.useState("")
+    const [actionChecked, setActionChecked] = React.useState(false)
 
     // Computed metrics
     const totalProjects = proposals.length
@@ -134,13 +137,14 @@ export default function AdminProjectsPage() {
         setActionTarget(project)
         setActionType(action)
         setActionRemark("")
+        setActionChecked(false)
         setActionDialogOpen(true)
     }
 
     function handleConfirmAction() {
         if (!actionTarget) return
         const message = actionRemark.trim() || (actionType === "approved" ? "Proposal approved by admin." : "Proposal rejected by admin.")
-        updateProposalStatus(actionTarget.id, actionType, "System Admin", "Admin", message)
+        updateProposalStatus(actionTarget._id, actionType, "System Admin", "Admin", message)
         setActionDialogOpen(false)
         setActionTarget(null)
         setActionRemark("")
@@ -148,7 +152,7 @@ export default function AdminProjectsPage() {
 
     function handleAddRemark() {
         if (!selectedProject || !remarkText.trim()) return
-        addRemark(selectedProject.id, "System Admin", "Admin", remarkText.trim())
+        addRemark(selectedProject._id, "System Admin", "Admin", remarkText.trim())
         setRemarkText("")
     }
 
@@ -223,6 +227,7 @@ export default function AdminProjectsPage() {
                                     <SelectItem value="pending">Pending</SelectItem>
                                     <SelectItem value="approved">Approved</SelectItem>
                                     <SelectItem value="rejected">Rejected</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -232,7 +237,7 @@ export default function AdminProjectsPage() {
                                 <SelectTrigger id="filter-supervisor" className="bg-white"><SelectValue placeholder="All Supervisors" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Supervisors</SelectItem>
-                                    {supervisorsList.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                                    {supervisorNames.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -262,12 +267,17 @@ export default function AdminProjectsPage() {
                                     <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-400">No projects found.</TableCell></TableRow>
                                 ) : (
                                     filteredProjects.map((project) => (
-                                        <TableRow key={project.id} className="hover:bg-slate-50 border-slate-100">
+                                        <TableRow key={project._id} className="hover:bg-slate-50 border-slate-100">
                                             <TableCell className="py-3.5">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-semibold text-sm text-slate-900 leading-snug">{project.title}</span>
                                                     <span className="text-xs text-slate-500 line-clamp-1">{truncateText(project.description, 45)}</span>
                                                     <span className="text-[11px] text-slate-400 mt-0.5">Submitted: {project.submittedDate}</span>
+                                                    {project.attachedFileUrl && project.attachedFileType && (
+                                                        <div className="mt-1">
+                                                            <FileCard fileUrl={project.attachedFileUrl} fileType={project.attachedFileType} />
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-3.5">
@@ -341,6 +351,14 @@ export default function AdminProjectsPage() {
                                 </div>
                             </div>
 
+                            {/* Attached File */}
+                            {selectedProject.attachedFileUrl && selectedProject.attachedFileType && (
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Attached File</Label>
+                                    <FileCard fileUrl={selectedProject.attachedFileUrl} fileType={selectedProject.attachedFileType} />
+                                </div>
+                            )}
+
                             {/* Student & Supervisor row */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
@@ -409,7 +427,7 @@ export default function AdminProjectsPage() {
                                 {selectedProject.remarks.length > 0 ? (
                                     <div className="space-y-2 max-h-48 overflow-y-auto">
                                         {selectedProject.remarks.map((r) => (
-                                            <div key={r.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                                            <div key={r._id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         <div className="p-0.5 bg-slate-200 rounded-full"><User className="w-3 h-3 text-slate-600" /></div>
@@ -485,6 +503,17 @@ export default function AdminProjectsPage() {
                                     onChange={(e) => setActionRemark(e.target.value)}
                                 />
                             </div>
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={actionChecked}
+                                    onChange={(e) => setActionChecked(e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs font-medium text-slate-600">
+                                    I confirm I want to {actionType === "approved" ? "approve" : "reject"} this proposal
+                                </span>
+                            </label>
                         </div>
                     )}
                     <DialogFooter className="gap-2 sm:gap-0">
@@ -494,6 +523,7 @@ export default function AdminProjectsPage() {
                         <Button
                             className={`gap-1.5 text-white ${actionType === "approved" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"}`}
                             onClick={handleConfirmAction}
+                            disabled={!actionChecked}
                         >
                             {actionType === "approved" ? <ThumbsUp className="w-4 h-4" /> : <ThumbsDown className="w-4 h-4" />}
                             {actionType === "approved" ? "Confirm Approve" : "Confirm Reject"}

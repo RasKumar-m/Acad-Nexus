@@ -37,6 +37,7 @@ import {
 } from "lucide-react"
 import { useProposals, type Proposal } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
+import FileCard from "@/components/FileCard"
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function statusConfig(status: string) {
@@ -47,6 +48,8 @@ function statusConfig(status: string) {
             return { label: "Approved", badge: "border-emerald-200 bg-emerald-50 text-emerald-700", cardBorder: "border-l-emerald-400", cardBg: "bg-emerald-50/20" }
         case "rejected":
             return { label: "Rejected", badge: "border-rose-200 bg-rose-50 text-rose-700", cardBorder: "border-l-rose-400", cardBg: "bg-rose-50/20" }
+        case "completed":
+            return { label: "Completed", badge: "border-violet-200 bg-violet-50 text-violet-700", cardBorder: "border-l-violet-400", cardBg: "bg-violet-50/20" }
         default:
             return { label: status, badge: "border-slate-200 bg-slate-50 text-slate-700", cardBorder: "border-l-slate-400", cardBg: "" }
     }
@@ -70,6 +73,7 @@ export default function PendingRequestsPage() {
     const [confirmAction, setConfirmAction] = React.useState<"approved" | "rejected">("approved")
     const [confirmTarget, setConfirmTarget] = React.useState<Proposal | null>(null)
     const [confirmRemark, setConfirmRemark] = React.useState("")
+    const [confirmChecked, setConfirmChecked] = React.useState(false)
 
     // Get proposals assigned to this guide (supervisor matches current user) or pending proposals
     const guideRequests = proposals.filter(
@@ -103,6 +107,7 @@ export default function PendingRequestsPage() {
         setConfirmTarget(req)
         setConfirmAction(action)
         setConfirmRemark("")
+        setConfirmChecked(false)
         setConfirmOpen(true)
     }
 
@@ -114,7 +119,7 @@ export default function PendingRequestsPage() {
             (confirmAction === "approved"
                 ? `Supervision accepted by ${guideDisplayName}.`
                 : `Supervision declined by ${guideDisplayName}.`)
-        updateProposalStatus(confirmTarget.id, confirmAction, guideDisplayName, "Teacher", message)
+        updateProposalStatus(confirmTarget._id, confirmAction, guideDisplayName, "Teacher", message)
         setConfirmOpen(false)
         setConfirmTarget(null)
         setConfirmRemark("")
@@ -123,7 +128,7 @@ export default function PendingRequestsPage() {
     function handleAddViewRemark() {
         if (!viewTarget || !viewRemarkText.trim()) return
         const guideDisplayName = user?.name ?? "Guide"
-        addRemark(viewTarget.id, guideDisplayName, "Teacher", viewRemarkText.trim())
+        addRemark(viewTarget._id, guideDisplayName, "Teacher", viewRemarkText.trim())
         setViewRemarkText("")
     }
 
@@ -196,7 +201,7 @@ export default function PendingRequestsPage() {
                         const config = statusConfig(req.status)
                         return (
                             <div
-                                key={req.id}
+                                key={req._id}
                                 className={`flex flex-col gap-4 p-5 bg-white rounded-xl border border-slate-100 shadow-sm border-l-4 ${config.cardBorder} ${config.cardBg} transition-all hover:shadow-md`}
                             >
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -224,6 +229,11 @@ export default function PendingRequestsPage() {
                                                 <MessageSquare className="w-3 h-3 shrink-0" />
                                                 {req.remarks.length} remark{req.remarks.length !== 1 ? "s" : ""}
                                             </p>
+                                        )}
+                                        {req.attachedFileUrl && req.attachedFileType && (
+                                            <div className="mt-1">
+                                                <FileCard fileUrl={req.attachedFileUrl} fileType={req.attachedFileType} />
+                                            </div>
                                         )}
                                     </div>
 
@@ -295,6 +305,14 @@ export default function PendingRequestsPage() {
                                 </div>
                             </div>
 
+                            {/* Attached File */}
+                            {viewTarget.attachedFileUrl && viewTarget.attachedFileType && (
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Attached File</Label>
+                                    <FileCard fileUrl={viewTarget.attachedFileUrl} fileType={viewTarget.attachedFileType} />
+                                </div>
+                            )}
+
                             {/* Student Info */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
@@ -327,7 +345,7 @@ export default function PendingRequestsPage() {
                                 {viewTarget.remarks.length > 0 ? (
                                     <div className="space-y-2 max-h-48 overflow-y-auto">
                                         {viewTarget.remarks.map((r) => (
-                                            <div key={r.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                                            <div key={r._id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         <div className="p-0.5 bg-slate-200 rounded-full"><User className="w-3 h-3 text-slate-600" /></div>
@@ -430,6 +448,18 @@ export default function PendingRequestsPage() {
                                     The student will be notified that their request has been declined.
                                 </p>
                             )}
+
+                            <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={confirmChecked}
+                                    onChange={(e) => setConfirmChecked(e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs font-medium text-slate-600">
+                                    I confirm I want to {confirmAction === "approved" ? "accept" : "reject"} this supervision request
+                                </span>
+                            </label>
                         </div>
                     )}
 
@@ -439,6 +469,7 @@ export default function PendingRequestsPage() {
                         </DialogClose>
                         <Button
                             onClick={handleConfirm}
+                            disabled={!confirmChecked}
                             className={confirmAction === "approved" ? "bg-emerald-500 hover:bg-emerald-600 text-white font-medium" : "bg-rose-500 hover:bg-rose-600 text-white font-medium"}
                         >
                             {confirmAction === "approved" ? "Accept" : "Reject"}

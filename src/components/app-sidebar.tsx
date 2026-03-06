@@ -18,6 +18,7 @@ import {
     FolderOpen,
     Bell,
     UserCheck,
+    Milestone,
     type LucideIcon,
 } from "lucide-react"
 
@@ -50,6 +51,7 @@ const teacherNav: NavItem[] = [
     { title: "Dashboard", url: "/guide", icon: Home },
     { title: "Pending Requests", url: "/guide/pending-requests", icon: Clock },
     { title: "Assigned Students", url: "/guide/assigned-students", icon: Users },
+    { title: "Milestones", url: "/guide/milestones", icon: Milestone },
     { title: "Student Files", url: "/guide/student-files", icon: FolderOpen },
 ]
 

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { useSession, signIn, signOut } from "next-auth/react"
 
 // ─── Types ──────────────────────────────────────────────────────────
 export type UserRole = "Admin" | "Teacher" | "Student"
@@ -17,36 +18,32 @@ export interface AuthUser {
 interface AuthContextType {
     user: AuthUser | null
     isLoading: boolean
-    login: (email: string, password: string, role: UserRole) => Promise<boolean>
+    login: (email: string, password: string) => Promise<boolean>
     logout: () => void
 }
 
-// ─── Mock Users ─────────────────────────────────────────────────────
-const mockUsers: Record<string, AuthUser & { password: string }> = {
-    "admin@acad.edu": {
-        id: "1",
-        name: "System Admin",
-        email: "admin@acad.edu",
-        initials: "SA",
-        role: "Admin",
-        password: "admin123",
-    },
-    "sana.khan@university.edu": {
-        id: "2",
-        name: "Prof. Sana Khan",
-        email: "sana.khan@university.edu",
-        initials: "SK",
-        role: "Teacher",
-        password: "guide123",
-    },
-    "ahmed.saeed@student.edu": {
-        id: "3",
-        name: "Ahmed Saeed",
-        email: "ahmed.saeed@student.edu",
-        initials: "AS",
-        role: "Student",
-        password: "student123",
-    },
+// ─── Helpers ────────────────────────────────────────────────────────
+function getInitials(name: string): string {
+    return name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+}
+
+/** Map DB role (lowercase) → display role */
+function mapDbRole(dbRole: string): UserRole {
+    switch (dbRole) {
+        case "admin":
+            return "Admin"
+        case "guide":
+            return "Teacher"
+        case "student":
+            return "Student"
+        default:
+            return "Student"
+    }
 }
 
 // ─── Role → Route Mapping ───────────────────────────────────────────
@@ -76,50 +73,34 @@ export function useAuth() {
 
 // ─── Provider ───────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = React.useState<AuthUser | null>(null)
-    const [isLoading, setIsLoading] = React.useState(true)
+    const { data: session, status } = useSession()
+    const isLoading = status === "loading"
 
-    // Hydrate from localStorage on mount
-    React.useEffect(() => {
-        try {
-            const stored = localStorage.getItem("acadnexus_user")
-            if (stored) {
-                const parsed = JSON.parse(stored) as AuthUser
-                setUser(parsed)
-            }
-        } catch {
-            localStorage.removeItem("acadnexus_user")
-        } finally {
-            setIsLoading(false)
+    const user: AuthUser | null = React.useMemo(() => {
+        if (!session?.user) return null
+        return {
+            id: session.user.id,
+            name: session.user.name ?? "",
+            email: session.user.email ?? "",
+            initials: getInitials(session.user.name ?? ""),
+            role: mapDbRole(session.user.role),
         }
-    }, [])
+    }, [session])
 
-    const login = React.useCallback(async (email: string, password: string, role: UserRole): Promise<boolean> => {
-        // Simulate network delay
-        await new Promise((r) => setTimeout(r, 600))
-
-        const normalizedEmail = email.toLowerCase().trim()
-        const mockUser = mockUsers[normalizedEmail]
-
-        if (mockUser && mockUser.password === password && mockUser.role === role) {
-            const authUser: AuthUser = {
-                id: mockUser.id,
-                name: mockUser.name,
-                email: mockUser.email,
-                initials: mockUser.initials,
-                role: mockUser.role,
-            }
-            setUser(authUser)
-            localStorage.setItem("acadnexus_user", JSON.stringify(authUser))
-            return true
-        }
-
-        return false
-    }, [])
+    const login = React.useCallback(
+        async (email: string, password: string): Promise<boolean> => {
+            const result = await signIn("credentials", {
+                email,
+                password,
+                redirect: false,
+            })
+            return result?.ok === true
+        },
+        []
+    )
 
     const logout = React.useCallback(() => {
-        setUser(null)
-        localStorage.removeItem("acadnexus_user")
+        signOut({ callbackUrl: "/login" })
     }, [])
 
     const value = React.useMemo(
@@ -151,7 +132,6 @@ export function ProtectedRoute({
         }
 
         if (!allowedRoles.includes(user.role)) {
-            // Redirect to user's own dashboard
             router.replace(roleRoutes[user.role])
         }
     }, [user, isLoading, allowedRoles, router, pathname])

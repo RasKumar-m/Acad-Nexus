@@ -1,0 +1,455 @@
+"use client"
+
+import * as React from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogClose,
+} from "@/components/ui/dialog"
+import {
+    Milestone,
+    Plus,
+    Loader2,
+    Trash2,
+    CheckCircle2,
+    Clock,
+    FileText,
+    ExternalLink,
+    Download,
+} from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { useProposals } from "@/lib/proposal-context"
+
+// ─── Types ──────────────────────────────────────────────────────────
+interface MilestoneItem {
+    _id: string
+    title: string
+    description: string
+    dueDate: string
+    status: "pending" | "submitted" | "reviewed"
+    fileUrl: string | null
+    fileName: string | null
+    submittedAt: string | null
+    createdAt: string
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+function statusBadge(status: string) {
+    switch (status) {
+        case "pending":
+            return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200"><Clock className="w-3 h-3 mr-1" />Pending</Badge>
+        case "submitted":
+            return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200"><FileText className="w-3 h-3 mr-1" />Submitted</Badge>
+        case "reviewed":
+            return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200"><CheckCircle2 className="w-3 h-3 mr-1" />Reviewed</Badge>
+        default:
+            return <Badge variant="outline">{status}</Badge>
+    }
+}
+
+// ─── Page ───────────────────────────────────────────────────────────
+export default function GuideMilestonesPage() {
+    const { user } = useAuth()
+    const { proposals, loading: proposalsLoading } = useProposals()
+
+    // Filter to only proposals supervised by this guide
+    const myProposals = React.useMemo(
+        () => proposals.filter((p) => p.supervisor === user?.name && (p.status === "approved" || p.status === "completed")),
+        [proposals, user?.name]
+    )
+
+    // ── State ───────────────────────────────────────────────────────
+    const [selectedProposalId, setSelectedProposalId] = React.useState("")
+    const [milestones, setMilestones] = React.useState<Record<string, MilestoneItem[]>>({})
+    const [loadingMilestones, setLoadingMilestones] = React.useState<Record<string, boolean>>({})
+
+    // Form state
+    const [formProposalId, setFormProposalId] = React.useState("")
+    const [formTitle, setFormTitle] = React.useState("")
+    const [formDesc, setFormDesc] = React.useState("")
+    const [formDueDate, setFormDueDate] = React.useState("")
+    const [creating, setCreating] = React.useState(false)
+    const [formError, setFormError] = React.useState("")
+
+    // Delete dialog
+    const [deleteOpen, setDeleteOpen] = React.useState(false)
+    const [deleteTarget, setDeleteTarget] = React.useState<{ proposalId: string; milestone: MilestoneItem } | null>(null)
+    const [deleting, setDeleting] = React.useState(false)
+
+    // ── Fetch milestones for a proposal ─────────────────────────────
+    const fetchMilestones = React.useCallback(async (proposalId: string) => {
+        setLoadingMilestones((prev) => ({ ...prev, [proposalId]: true }))
+        try {
+            const res = await fetch(`/api/proposals/${proposalId}/milestones`)
+            if (!res.ok) return
+            const data: MilestoneItem[] = await res.json()
+            setMilestones((prev) => ({ ...prev, [proposalId]: data }))
+        } finally {
+            setLoadingMilestones((prev) => ({ ...prev, [proposalId]: false }))
+        }
+    }, [])
+
+    // Auto-fetch milestones for all proposals
+    React.useEffect(() => {
+        if (!proposalsLoading) {
+            myProposals.forEach((p) => {
+                if (!milestones[p._id]) fetchMilestones(p._id)
+            })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [myProposals, proposalsLoading])
+
+    // ── Create Milestone ────────────────────────────────────────────
+    async function handleCreate(e: React.FormEvent) {
+        e.preventDefault()
+        setFormError("")
+
+        if (!formProposalId || !formTitle || !formDesc || !formDueDate) {
+            setFormError("All fields are required.")
+            return
+        }
+
+        setCreating(true)
+        try {
+            const res = await fetch(`/api/proposals/${formProposalId}/milestones`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    title: String(formTitle), 
+                    description: String(formDesc), 
+                    dueDate: String(formDueDate) 
+                }),
+            })
+            if (!res.ok) {
+                const err = await res.json()
+                setFormError(err.error || "Failed to create milestone")
+                return
+            }
+            const updatedMilestones: MilestoneItem[] = await res.json()
+            setMilestones((prev) => ({ ...prev, [formProposalId]: updatedMilestones }))
+            setFormTitle("")
+            setFormDesc("")
+            setFormDueDate("")
+            setFormProposalId("")
+        } catch {
+            setFormError("Network error. Please try again.")
+        } finally {
+            setCreating(false)
+        }
+    }
+
+    // ── Delete Milestone ────────────────────────────────────────────
+    async function handleDelete() {
+        if (!deleteTarget) return
+        setDeleting(true)
+        try {
+            const res = await fetch(
+                `/api/proposals/${deleteTarget.proposalId}/milestones/${deleteTarget.milestone._id}`,
+                { method: "DELETE" }
+            )
+            if (res.ok) {
+                const updated: MilestoneItem[] = await res.json()
+                setMilestones((prev) => ({ ...prev, [deleteTarget.proposalId]: updated }))
+            }
+        } finally {
+            setDeleting(false)
+            setDeleteOpen(false)
+            setDeleteTarget(null)
+        }
+    }
+
+    // ── Mark as Reviewed ────────────────────────────────────────────
+    async function handleMarkReviewed(proposalId: string, milestoneId: string) {
+        const res = await fetch(`/api/proposals/${proposalId}/milestones/${milestoneId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "reviewed" }),
+        })
+        if (res.ok) {
+            const updated: MilestoneItem[] = await res.json()
+            setMilestones((prev) => ({ ...prev, [proposalId]: updated }))
+        }
+    }
+
+    // ── All milestones across proposals (for the overview table) ────
+    const allMilestones = React.useMemo(() => {
+        const result: { proposal: typeof myProposals[0]; milestone: MilestoneItem }[] = []
+        for (const p of myProposals) {
+            const ms = milestones[p._id] ?? []
+            for (const m of ms) {
+                result.push({ proposal: p, milestone: m })
+            }
+        }
+        // Sort by due date
+        result.sort((a, b) => new Date(a.milestone.dueDate).getTime() - new Date(b.milestone.dueDate).getTime())
+        return result
+    }, [myProposals, milestones])
+
+    // Filtered by selected student
+    const filteredMilestones = selectedProposalId && selectedProposalId !== "all"
+        ? allMilestones.filter((item) => item.proposal._id === selectedProposalId)
+        : allMilestones
+
+    if (proposalsLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-96">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto">
+            {/* ─── Header ──────────────────────────────────────────── */}
+            <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                    <Milestone className="w-6 h-6 text-emerald-600" />
+                    Milestone Dashboard
+                </h1>
+                <p className="text-sm text-slate-500 mt-1">
+                    Create milestones for your assigned students and track their progress.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* ─── Create Milestone Form ───────────────────────── */}
+                <Card className="shadow-sm border-slate-100 bg-white xl:col-span-1">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-800">
+                            <Plus className="w-4 h-4 text-emerald-600" />
+                            New Milestone
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="ms-student">Student / Project</Label>
+                                <Select value={formProposalId} onValueChange={setFormProposalId}>
+                                    <SelectTrigger id="ms-student">
+                                        <SelectValue placeholder="Select a student" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {myProposals.map((p) => (
+                                            <SelectItem key={p._id} value={p._id}>
+                                                {p.studentName} — {p.title}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ms-title">Milestone Title</Label>
+                                <Input
+                                    id="ms-title"
+                                    value={formTitle}
+                                    onChange={(e) => setFormTitle(e.target.value)}
+                                    placeholder="e.g. Literature Review"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ms-desc">Description</Label>
+                                <Textarea
+                                    id="ms-desc"
+                                    value={formDesc}
+                                    onChange={(e) => setFormDesc(e.target.value)}
+                                    placeholder="What the student needs to deliver"
+                                    rows={3}
+                                    className="resize-none"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ms-due">Due Date</Label>
+                                <Input
+                                    id="ms-due"
+                                    type="date"
+                                    value={formDueDate}
+                                    onChange={(e) => setFormDueDate(e.target.value)}
+                                />
+                            </div>
+
+                            {formError && (
+                                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{formError}</p>
+                            )}
+
+                            <Button type="submit" disabled={creating} className="w-full">
+                                {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                                Create Milestone
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                {/* ─── Milestones Table ────────────────────────────── */}
+                <Card className="shadow-sm border-slate-100 bg-white xl:col-span-2">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                            <CardTitle className="text-base font-semibold text-slate-800">
+                                Active Milestones
+                            </CardTitle>
+                            <Select value={selectedProposalId} onValueChange={setSelectedProposalId}>
+                                <SelectTrigger className="w-full sm:w-64">
+                                    <SelectValue placeholder="All Students" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Students</SelectItem>
+                                    {myProposals.map((p) => (
+                                        <SelectItem key={p._id} value={p._id}>
+                                            {p.studentName}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {filteredMilestones.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                                    <Milestone className="w-6 h-6 text-slate-300" />
+                                </div>
+                                <h4 className="font-medium text-slate-700 mb-1">No milestones yet</h4>
+                                <p className="text-sm text-slate-500">Create a milestone using the form on the left.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
+                                <Table className="min-w-[800px]">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Student</TableHead>
+                                            <TableHead>Milestone</TableHead>
+                                            <TableHead>Due Date</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>File</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredMilestones.map(({ proposal, milestone }) => (
+                                            <TableRow key={milestone._id}>
+                                                <TableCell className="font-medium text-sm">
+                                                    {proposal.studentName}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div>
+                                                        <p className="font-medium text-sm text-slate-800">{milestone.title}</p>
+                                                        <p className="text-xs text-slate-500 max-w-48 truncate">{milestone.description}</p>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-sm text-slate-600">
+                                                    {new Date(milestone.dueDate).toLocaleDateString("en-US", {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        year: "numeric",
+                                                    })}
+                                                </TableCell>
+                                                <TableCell>{statusBadge(milestone.status)}</TableCell>
+                                                <TableCell>
+                                                    {milestone.fileUrl ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <a
+                                                                href={milestone.fileUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1"
+                                                            >
+                                                                <ExternalLink className="w-3 h-3" />
+                                                                View
+                                                            </a>
+                                                            <a
+                                                                href={milestone.fileUrl}
+                                                                download={milestone.fileName ?? "file"}
+                                                                className="text-emerald-600 hover:text-emerald-700 text-xs flex items-center gap-1 ml-2"
+                                                            >
+                                                                <Download className="w-3 h-3" />
+                                                            </a>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400">—</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        {milestone.status === "submitted" && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-8 px-2 text-xs"
+                                                                onClick={() => handleMarkReviewed(proposal._id, milestone._id)}
+                                                            >
+                                                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                                                Review
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 px-2"
+                                                            onClick={() => {
+                                                                setDeleteTarget({ proposalId: proposal._id, milestone })
+                                                                setDeleteOpen(true)
+                                                            }}
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* ─── Delete Confirmation ─────────────────────────────── */}
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Milestone</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-slate-600">
+                        Are you sure you want to delete &ldquo;{deleteTarget?.milestone.title}&rdquo;? This action cannot be undone.
+                    </p>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                            {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
+}

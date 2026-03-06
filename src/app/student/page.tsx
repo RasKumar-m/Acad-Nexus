@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import {
     Card,
     CardContent,
@@ -11,6 +12,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogClose,
+} from "@/components/ui/dialog"
+import {
     BookX,
     CheckCircle2,
     Clock,
@@ -21,11 +30,28 @@ import {
     CalendarDays,
     Upload,
     CalendarPlus,
-    ArrowRight
+    ArrowRight,
+    Milestone,
+    Loader2,
+    CloudUpload,
+    X,
 } from "lucide-react"
 import Link from "next/link"
 import { useProposals } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
+import { useUploadThing } from "@/lib/uploadthing"
+
+// ─── Milestone type ─────────────────────────────────────────────────
+interface MilestoneItem {
+    _id: string
+    title: string
+    description: string
+    dueDate: string
+    status: "pending" | "submitted" | "reviewed"
+    fileUrl: string | null
+    fileName: string | null
+    submittedAt: string | null
+}
 
 export default function StudentDashboard() {
     const { user } = useAuth()
@@ -38,7 +64,7 @@ export default function StudentDashboard() {
     // Collect all remarks across all proposals (most recent first)
     const allRemarks = myProposals.flatMap((p) =>
         p.remarks.map((r) => ({ ...r, proposalTitle: p.title }))
-    ).sort((a, b) => b.id - a.id)
+    ).sort((a, b) => new Date(b.createdAt ?? "").getTime() - new Date(a.createdAt ?? "").getTime())
 
     const projectTitle = latestProposal?.title ?? "N/A"
     const projectDesc = latestProposal?.description ?? "No description provided yet. Please submit a project proposal to get started."
@@ -53,6 +79,85 @@ export default function StudentDashboard() {
     const progress = latestProposal
         ? latestProposal.status === "approved" ? 25 : latestProposal.status === "rejected" ? 0 : 10
         : 0
+
+    // ── Milestones state ────────────────────────────────────────────
+    const [milestones, setMilestones] = React.useState<MilestoneItem[]>([])
+    const [milestonesLoading, setMilestonesLoading] = React.useState(false)
+
+    // Upload dialog state
+    const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false)
+    const [activeMilestone, setActiveMilestone] = React.useState<MilestoneItem | null>(null)
+    const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
+    const [uploadProgress, setUploadProgress] = React.useState(0)
+    const [uploadError, setUploadError] = React.useState("")
+    const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+    const { startUpload, isUploading } = useUploadThing("projectFile", {
+        onUploadProgress: (p) => setUploadProgress(p),
+        onUploadError: (err) => {
+            setUploadError(err.message)
+            setSelectedFile(null)
+            setUploadProgress(0)
+        },
+    })
+
+    // Fetch milestones for approved/completed proposal
+    React.useEffect(() => {
+        if (!latestProposal || (latestProposal.status !== "approved" && latestProposal.status !== "completed")) return
+        setMilestonesLoading(true)
+        fetch(`/api/proposals/${latestProposal._id}/milestones`)
+            .then((r) => r.ok ? r.json() : [])
+            .then((data: MilestoneItem[]) => setMilestones(data))
+            .catch(() => {})
+            .finally(() => setMilestonesLoading(false))
+    }, [latestProposal])
+
+    function openUploadDialog(m: MilestoneItem) {
+        setActiveMilestone(m)
+        setSelectedFile(null)
+        setUploadProgress(0)
+        setUploadError("")
+        setUploadDialogOpen(true)
+    }
+
+    async function handleMilestoneUpload() {
+        if (!selectedFile || !activeMilestone || !latestProposal) return
+        setUploadError("")
+        setUploadProgress(0)
+
+        try {
+            const res = await startUpload([selectedFile])
+            if (!res?.[0]) {
+                setUploadError("Upload failed. Please try again.")
+                return
+            }
+            const uploaded = res[0]
+
+            // Update milestone in DB
+            const patchRes = await fetch(
+                `/api/proposals/${latestProposal._id}/milestones/${activeMilestone._id}`,
+                {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ fileUrl: uploaded.ufsUrl ?? uploaded.url, fileName: uploaded.name }),
+                }
+            )
+
+            if (patchRes.ok) {
+                const updatedMilestones: MilestoneItem[] = await patchRes.json()
+                setMilestones(updatedMilestones)
+            }
+
+            setUploadDialogOpen(false)
+            setSelectedFile(null)
+            setUploadProgress(0)
+        } catch (err) {
+            setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.")
+        }
+    }
+
+    const pendingMilestones = milestones.filter((m) => m.status === "pending")
+    const completedMilestones = milestones.filter((m) => m.status !== "pending")
 
     return (
         <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
@@ -218,13 +323,113 @@ export default function StudentDashboard() {
                             </Button>
                         </CardHeader>
                         <CardContent className="pt-6">
-                            <div className="flex flex-col items-center justify-center py-10 text-center">
-                                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                                    <CheckCircle2 className="w-6 h-6 text-slate-300" />
+                            {pendingMilestones.length > 0 ? (
+                                <div className="space-y-3">
+                                    {pendingMilestones.map((m) => (
+                                        <div
+                                            key={m._id}
+                                            className="flex items-center justify-between p-3 bg-amber-50/50 border border-amber-100 rounded-lg"
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="font-medium text-sm text-slate-800 truncate">{m.title}</p>
+                                                <p className="text-xs text-slate-500">
+                                                    Due {new Date(m.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                                </p>
+                                            </div>
+                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] shrink-0 ml-2">
+                                                <Clock className="w-3 h-3 mr-1" /> Pending
+                                            </Badge>
+                                        </div>
+                                    ))}
                                 </div>
-                                <h4 className="font-medium text-slate-700 mb-1">You&apos;re all caught up!</h4>
-                                <p className="text-sm text-slate-500 max-w-62.5">There are no upcoming deadlines at the moment.</p>
-                            </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-10 text-center">
+                                    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                                        <CheckCircle2 className="w-6 h-6 text-slate-300" />
+                                    </div>
+                                    <h4 className="font-medium text-slate-700 mb-1">You&apos;re all caught up!</h4>
+                                    <p className="text-sm text-slate-500 max-w-62.5">There are no upcoming deadlines at the moment.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* ─── My Milestones ─────────────────────────────── */}
+                    <Card className="shadow-sm border-slate-100 bg-white">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-800">
+                                <Milestone className="w-4.5 h-4.5 text-indigo-600" />
+                                My Milestones
+                            </CardTitle>
+                            <CardDescription>Click a pending milestone to upload your deliverable</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {milestonesLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                                </div>
+                            ) : milestones.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-8 text-center">
+                                    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                                        <Milestone className="w-6 h-6 text-slate-300" />
+                                    </div>
+                                    <p className="text-sm text-slate-500">No milestones assigned yet.</p>
+                                    <p className="text-xs text-slate-400 mt-1">Your guide will create milestones for you.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2.5">
+                                    {milestones.map((m) => {
+                                        const isPending = m.status === "pending"
+                                        const isSubmitted = m.status === "submitted"
+                                        const isReviewed = m.status === "reviewed"
+                                        const isOverdue = isPending && new Date(m.dueDate) < new Date()
+
+                                        return (
+                                            <button
+                                                key={m._id}
+                                                type="button"
+                                                disabled={!isPending}
+                                                onClick={() => isPending && openUploadDialog(m)}
+                                                className={`w-full text-left p-3 rounded-lg border transition-all ${
+                                                    isPending
+                                                        ? "border-amber-200 bg-amber-50/50 hover:border-amber-300 hover:shadow-sm cursor-pointer"
+                                                        : isSubmitted
+                                                        ? "border-blue-200 bg-blue-50/50 cursor-default"
+                                                        : "border-emerald-200 bg-emerald-50/50 cursor-default"
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium text-sm text-slate-800 truncate">{m.title}</p>
+                                                        <p className="text-xs text-slate-500 truncate mt-0.5">{m.description}</p>
+                                                        <p className="text-[11px] text-slate-400 mt-1">
+                                                            Due {new Date(m.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                                            {isOverdue && <span className="text-red-500 ml-1 font-semibold">• Overdue</span>}
+                                                        </p>
+                                                    </div>
+                                                    <div className="shrink-0">
+                                                        {isPending && (
+                                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
+                                                                <Upload className="w-3 h-3 mr-1" />Pending
+                                                            </Badge>
+                                                        )}
+                                                        {isSubmitted && (
+                                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                                                                <FileText className="w-3 h-3 mr-1" />Submitted
+                                                            </Badge>
+                                                        )}
+                                                        {isReviewed && (
+                                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                                                                <CheckCircle2 className="w-3 h-3 mr-1" />Reviewed
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -251,7 +456,7 @@ export default function StudentDashboard() {
                                 <ScrollArea className="h-56">
                                     <div className="space-y-3 pr-2">
                                         {allRemarks.slice(0, 5).map((r) => (
-                                            <div key={r.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                                            <div key={r._id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-xs font-semibold text-slate-700">{r.from}</span>
@@ -327,6 +532,105 @@ export default function StudentDashboard() {
 
                 </div>
             </div>
+
+            {/* ─── Milestone Upload Dialog ────────────────────────── */}
+            <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
+                if (!isUploading) {
+                    setUploadDialogOpen(open)
+                    if (!open) { setSelectedFile(null); setUploadProgress(0); setUploadError("") }
+                }
+            }}>
+                <DialogContent className="sm:max-w-md mx-4">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                            <Milestone className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 shrink-0" />
+                            <span className="truncate">Submit: {activeMilestone?.title}</span>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="bg-slate-50 p-3 rounded-lg border text-sm text-slate-600">
+                            <p>{activeMilestone?.description}</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                                Due {activeMilestone?.dueDate && new Date(activeMilestone.dueDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                            </p>
+                        </div>
+
+                        {/* File selection area */}
+                        <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-300 transition-colors">
+                            {selectedFile ? (
+                                <div className="space-y-2">
+                                    <FileText className="w-8 h-8 text-indigo-500 mx-auto" />
+                                    <p className="text-sm font-medium text-slate-800 truncate">{selectedFile.name}</p>
+                                    <p className="text-xs text-slate-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = "" }}
+                                        disabled={isUploading}
+                                        className="text-red-500 hover:text-red-600 h-8"
+                                    >
+                                        <X className="w-3.5 h-3.5 mr-1" /> Remove
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <CloudUpload className="w-8 h-8 text-slate-400 mx-auto" />
+                                    <p className="text-sm text-slate-500">Select a file to submit</p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        Browse Files
+                                    </Button>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        className="hidden"
+                                        accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.rar,.gz"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file) { setSelectedFile(file); setUploadError("") }
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Progress bar */}
+                        {isUploading && (
+                            <div className="space-y-1.5">
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500 text-center">Uploading… {uploadProgress}%</p>
+                            </div>
+                        )}
+
+                        {/* Error */}
+                        {uploadError && (
+                            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{uploadError}</p>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline" disabled={isUploading}>Cancel</Button>
+                        </DialogClose>
+                        <Button
+                            onClick={handleMilestoneUpload}
+                            disabled={!selectedFile || isUploading}
+                        >
+                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                            Submit Milestone
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

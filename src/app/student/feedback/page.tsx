@@ -17,7 +17,7 @@ import { useAuth } from "@/lib/auth-context"
 
 // ─── Types ──────────────────────────────────────────────────────────
 interface FeedbackItem {
-    id: number
+    id: string
     from: string
     fromRole: string
     initials: string
@@ -40,7 +40,7 @@ export default function FeedbackPage() {
     // Convert proposal remarks into FeedbackItem format
     const proposalFeedback: FeedbackItem[] = myProposals.flatMap((p) =>
         p.remarks.map((r) => ({
-            id: r.id,
+            id: r._id ?? "",
             from: r.from,
             fromRole: r.fromRole === "Admin" ? "Administrator" : "Supervisor",
             initials: r.from.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
@@ -51,9 +51,9 @@ export default function FeedbackPage() {
             isRead: false,
             priority: (r.action === "approved" || r.action === "rejected" ? "important" : "normal") as "important" | "normal",
         }))
-    ).sort((a, b) => b.id - a.id)
+    ).sort((a, b) => a.id < b.id ? 1 : -1)
 
-    const [selectedId, setSelectedId] = React.useState<number | null>(null)
+    const [selectedId, setSelectedId] = React.useState<string | null>(null)
 
     const feedbacks = proposalFeedback
     const selectedFeedback = feedbacks.find((f) => f.id === selectedId) ?? null
