@@ -151,3 +151,14 @@
     transition-duration: 200ms;
   }
 }
+
+/* Hide scrollbar but keep scrolling */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

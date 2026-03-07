@@ -2,13 +2,15 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose"
 
 // ─── Interface ──────────────────────────────────────────────────────
 export interface INotification extends Document {
-    userId: Types.ObjectId
-    userEmail: string
-    type: "proposal" | "assignment" | "feedback" | "deadline" | "system"
+    userId?: Types.ObjectId
+    userEmail?: string
+    type: "proposal" | "assignment" | "feedback" | "deadline" | "system" | "circular"
+    targetAudience: "all" | "student" | "guide" | "admin" | "individual"
     title: string
     message: string
     isRead: boolean
     relatedId?: string
+    postedBy?: string
     createdAt: Date
     updatedAt: Date
 }
@@ -19,18 +21,23 @@ const NotificationSchema = new Schema<INotification>(
         userId: {
             type: Schema.Types.ObjectId,
             ref: "User",
-            required: true,
+            required: false,
         },
         userEmail: {
             type: String,
-            required: true,
+            required: false,
             lowercase: true,
             trim: true,
         },
         type: {
             type: String,
-            enum: ["proposal", "assignment", "feedback", "deadline", "system"],
+            enum: ["proposal", "assignment", "feedback", "deadline", "system", "circular"],
             default: "system",
+        },
+        targetAudience: {
+            type: String,
+            enum: ["all", "student", "guide", "admin", "individual"],
+            default: "individual",
         },
         title: {
             type: String,
@@ -49,6 +56,10 @@ const NotificationSchema = new Schema<INotification>(
         relatedId: {
             type: String,
             default: "",
+        },
+        postedBy: {
+            type: String,
+            trim: true,
         },
     },
     {

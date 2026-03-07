@@ -4,10 +4,11 @@ import * as React from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bell, CalendarDays, MessageSquare, UserCheck, FileText, AlertTriangle, Check, BellOff, Loader2 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Bell, CalendarDays, MessageSquare, UserCheck, FileText, AlertTriangle, Check, BellOff, Loader2, Megaphone } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 
-type NotificationType = "deadline" | "feedback" | "assignment" | "proposal" | "system"
+type NotificationType = "deadline" | "feedback" | "assignment" | "proposal" | "system" | "circular"
 
 interface NotificationDoc {
     _id: string
@@ -15,6 +16,7 @@ interface NotificationDoc {
     title: string
     message: string
     isRead: boolean
+    postedBy?: string
     createdAt: string
 }
 
@@ -25,6 +27,7 @@ function typeConfig(type: NotificationType) {
         case "assignment": return { icon: <UserCheck className="w-5 h-5" />, color: "text-emerald-500", bgColor: "bg-emerald-50", borderColor: "border-l-emerald-500", label: "Assignment" }
         case "proposal": return { icon: <FileText className="w-5 h-5" />, color: "text-blue-500", bgColor: "bg-blue-50", borderColor: "border-l-blue-500", label: "Proposal" }
         case "system": return { icon: <AlertTriangle className="w-5 h-5" />, color: "text-amber-500", bgColor: "bg-amber-50", borderColor: "border-l-amber-500", label: "System" }
+        case "circular": return { icon: <Megaphone className="w-5 h-5" />, color: "text-orange-500", bgColor: "bg-orange-50", borderColor: "border-l-orange-500", label: "Announcement" }
         default: return { icon: <Bell className="w-5 h-5" />, color: "text-slate-500", bgColor: "bg-slate-50", borderColor: "border-l-slate-500", label: type }
     }
 }
@@ -33,11 +36,11 @@ export default function NotificationsPage() {
     const { user } = useAuth()
     const [notifications, setNotifications] = React.useState<NotificationDoc[]>([])
     const [loading, setLoading] = React.useState(true)
-    const [filterType, setFilterType] = React.useState<"all" | NotificationType>("all")
+    const [alertFilter, setAlertFilter] = React.useState<"all" | NotificationType>("all")
 
     const fetchNotifications = React.useCallback(() => {
         if (!user?.email) return
-        fetch(`/api/notifications?email=${encodeURIComponent(user.email)}`)
+        fetch(`/api/notifications?email=${encodeURIComponent(user.email)}&role=student`)
             .then((r) => { if (!r.ok) throw new Error("Failed"); return r.json() })
             .then((data) => {
                 setNotifications(data)
@@ -53,16 +56,19 @@ export default function NotificationsPage() {
         fetchNotifications()
     }, [fetchNotifications])
 
-    // Poll every 10 seconds for real-time notifications
+    // Poll every 10 seconds
     React.useEffect(() => {
         if (!user?.email) return
         const interval = setInterval(fetchNotifications, 10000)
         return () => clearInterval(interval)
     }, [user?.email, fetchNotifications])
 
-    const unreadCount = notifications.filter((n) => !n.isRead).length
+    // Split personal alerts vs circulars
+    const myAlerts = notifications.filter((n) => n.type !== "circular")
+    const circulars = notifications.filter((n) => n.type === "circular")
+    const unreadCount = myAlerts.filter((n) => !n.isRead).length
 
-    const filtered = filterType === "all" ? notifications : notifications.filter((n) => n.type === filterType)
+    const filteredAlerts = alertFilter === "all" ? myAlerts : myAlerts.filter((n) => n.type === alertFilter)
 
     async function markAsRead(id: string) {
         setNotifications((prev) => prev.map((n) => n._id === id ? { ...n, isRead: true } : n))
@@ -79,7 +85,7 @@ export default function NotificationsPage() {
         } catch (err) { console.error(err) }
     }
 
-    const filterButtons: { value: "all" | NotificationType; label: string }[] = [
+    const alertFilterButtons: { value: "all" | NotificationType; label: string }[] = [
         { value: "all", label: "All" },
         { value: "deadline", label: "Deadlines" },
         { value: "feedback", label: "Feedback" },
@@ -90,6 +96,36 @@ export default function NotificationsPage() {
 
     if (loading) {
         return <div className="flex items-center justify-center min-h-96"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
+    }
+
+    function renderNotificationCard(notif: NotificationDoc) {
+        const cfg = typeConfig(notif.type)
+        const date = new Date(notif.createdAt)
+        return (
+            <Card key={notif._id} className={`shadow-sm border-l-4 ${cfg.borderColor} transition-all hover:shadow-md cursor-pointer ${!notif.isRead ? "bg-blue-50/30" : "bg-white"}`} onClick={() => markAsRead(notif._id)}>
+                <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                        <div className={`p-2.5 rounded-xl ${cfg.bgColor} ${cfg.color} shrink-0`}>{cfg.icon}</div>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className={`text-sm ${!notif.isRead ? "font-bold text-slate-900" : "font-semibold text-slate-800"}`}>{notif.title}</h3>
+                                        {!notif.isRead && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+                                    </div>
+                                    <p className="text-sm text-slate-600 mt-1 leading-relaxed">{notif.message}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 mt-2.5 text-xs text-slate-400">
+                                <Badge variant="outline" className={`text-xs font-medium ${cfg.bgColor} ${cfg.color} border-transparent`}>{cfg.label}</Badge>
+                                <span>{date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>
+                                <span className="hidden sm:inline">{date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        )
     }
 
     return (
@@ -109,56 +145,84 @@ export default function NotificationsPage() {
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-                {filterButtons.map((btn) => (
-                    <Button key={btn.value} variant="outline" size="sm" className={`text-xs font-medium rounded-full px-4 transition-colors ${filterType === btn.value ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`} onClick={() => setFilterType(btn.value)}>
-                        {btn.label}
-                    </Button>
-                ))}
-            </div>
+            <Tabs defaultValue="alerts" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="alerts" className="gap-2">
+                        <Bell className="w-4 h-4" /> My Alerts
+                        {unreadCount > 0 && <Badge className="bg-blue-500 text-white text-[10px] px-1.5 py-0 ml-1">{unreadCount}</Badge>}
+                    </TabsTrigger>
+                    <TabsTrigger value="noticeboard" className="gap-2">
+                        <Megaphone className="w-4 h-4" /> Notice Board
+                        {circulars.length > 0 && <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0 ml-1">{circulars.length}</Badge>}
+                    </TabsTrigger>
+                </TabsList>
 
-            {filtered.length === 0 ? (
-                <Card className="shadow-sm border-slate-100">
-                    <CardContent className="p-16 flex flex-col items-center gap-3 text-slate-400">
-                        <BellOff className="w-12 h-12 text-slate-300" />
-                        <p className="font-semibold text-lg text-slate-500">No notifications</p>
-                        <p className="text-sm">{filterType === "all" ? "You're all caught up!" : "No notifications in this category."}</p>
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="space-y-3 pb-8">
-                    {filtered.map((notif) => {
-                        const cfg = typeConfig(notif.type)
-                        const date = new Date(notif.createdAt)
+                {/* ─── Tab 1: My Alerts ─────────────────────────── */}
+                <TabsContent value="alerts">
+                    <div className="flex items-center gap-2 flex-wrap mb-4">
+                        {alertFilterButtons.map((btn) => (
+                            <Button key={btn.value} variant="outline" size="sm" className={`text-xs font-medium rounded-full px-4 transition-colors ${alertFilter === btn.value ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`} onClick={() => setAlertFilter(btn.value)}>
+                                {btn.label}
+                            </Button>
+                        ))}
+                    </div>
 
-                        return (
-                            <Card key={notif._id} className={`shadow-sm border-l-4 ${cfg.borderColor} transition-all hover:shadow-md cursor-pointer ${!notif.isRead ? "bg-blue-50/30" : "bg-white"}`} onClick={() => markAsRead(notif._id)}>
-                                <CardContent className="p-4 sm:p-5">
-                                    <div className="flex items-start gap-3 sm:gap-4">
-                                        <div className={`p-2.5 rounded-xl ${cfg.bgColor} ${cfg.color} shrink-0`}>{cfg.icon}</div>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-start justify-between gap-2">
+                    {filteredAlerts.length === 0 ? (
+                        <Card className="shadow-sm border-slate-100">
+                            <CardContent className="p-16 flex flex-col items-center gap-3 text-slate-400">
+                                <BellOff className="w-12 h-12 text-slate-300" />
+                                <p className="font-semibold text-lg text-slate-500">No alerts</p>
+                                <p className="text-sm">{alertFilter === "all" ? "You're all caught up!" : "No alerts in this category."}</p>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="space-y-3 pb-8">
+                            {filteredAlerts.map(renderNotificationCard)}
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* ─── Tab 2: Notice Board ─────────────────────── */}
+                <TabsContent value="noticeboard">
+                    {circulars.length === 0 ? (
+                        <Card className="shadow-sm border-slate-100">
+                            <CardContent className="p-16 flex flex-col items-center gap-3 text-slate-400">
+                                <Megaphone className="w-12 h-12 text-slate-300" />
+                                <p className="font-semibold text-lg text-slate-500">No announcements</p>
+                                <p className="text-sm">No department circulars have been posted yet.</p>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="space-y-3 pb-8">
+                            {circulars.map((notif) => {
+                                const cfg = typeConfig("circular")
+                                const date = new Date(notif.createdAt)
+                                return (
+                                    <Card key={notif._id} className="shadow-sm border-l-4 border-l-orange-500 bg-white hover:shadow-md transition-all">
+                                        <CardContent className="p-4 sm:p-5">
+                                            <div className="flex items-start gap-3 sm:gap-4">
+                                                <div className={`p-2.5 rounded-xl ${cfg.bgColor} ${cfg.color} shrink-0`}>{cfg.icon}</div>
                                                 <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <h3 className={`text-sm ${!notif.isRead ? "font-bold text-slate-900" : "font-semibold text-slate-800"}`}>{notif.title}</h3>
-                                                        {!notif.isRead && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <h3 className="text-sm font-semibold text-slate-800">{notif.title}</h3>
                                                     </div>
-                                                    <p className="text-sm text-slate-600 mt-1 leading-relaxed">{notif.message}</p>
+                                                    <p className="text-sm text-slate-600 mt-1 leading-relaxed whitespace-pre-line">{notif.message}</p>
+                                                    <div className="flex items-center gap-3 mt-2.5 text-xs text-slate-400">
+                                                        <Badge variant="outline" className="text-xs font-medium bg-orange-50 text-orange-500 border-transparent">Announcement</Badge>
+                                                        {notif.postedBy && <span>by {notif.postedBy}</span>}
+                                                        <span>{date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>
+                                                        <span className="hidden sm:inline">{date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3 mt-2.5 text-xs text-slate-400">
-                                                <Badge variant="outline" className={`text-xs font-medium ${cfg.bgColor} ${cfg.color} border-transparent`}>{cfg.label}</Badge>
-                                                <span>{date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>
-                                                <span className="hidden sm:inline">{date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )
-                    })}
-                </div>
-            )}
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

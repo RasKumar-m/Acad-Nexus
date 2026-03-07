@@ -3,9 +3,11 @@
 import * as React from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Users, Clock, CheckCircle2, ArrowUpRight, FolderOpen, FileText, Loader2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { useProposals } from "@/lib/proposal-context"
+import { NoticeWidget } from "@/components/NoticeWidget"
 
 export default function GuideDashboard() {
     const { user } = useAuth()
@@ -23,7 +25,7 @@ export default function GuideDashboard() {
     const pendingCount = myProposals.filter((p) => p.status === "pending").length
     const approvedCount = myProposals.filter((p) => p.status === "approved").length
 
-    // Fetch files count
+    // Fetch files count + circulars
     React.useEffect(() => {
         fetch("/api/files")
             .then((r) => r.json())
@@ -56,43 +58,6 @@ export default function GuideDashboard() {
                 <div className="absolute -right-5 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-xl" />
             </div>
 
-            {/* Metrics Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                <Link href="/guide/assigned-students" className="block group">
-                    <Card className="shadow-sm border-slate-100 hover:shadow-md hover:border-blue-200 transition-all h-full bg-white">
-                        <CardContent className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
-                            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0 group-hover:bg-blue-100 transition-colors"><Users className="w-5 h-5" /></div>
-                            <div className="min-w-0"><p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Assigned</p><h3 className="font-bold text-2xl text-slate-900">{assignedCount}</h3></div>
-                        </CardContent>
-                    </Card>
-                </Link>
-
-                <Link href="/guide/pending-requests" className="block group">
-                    <Card className="shadow-sm border-slate-100 hover:shadow-md hover:border-amber-200 transition-all h-full bg-white">
-                        <CardContent className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
-                            <div className="p-2.5 bg-amber-50 text-amber-500 rounded-xl shrink-0 group-hover:bg-amber-100 transition-colors"><Clock className="w-5 h-5" /></div>
-                            <div className="min-w-0"><p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Pending</p><h3 className="font-bold text-2xl text-slate-900">{pendingCount}</h3></div>
-                        </CardContent>
-                    </Card>
-                </Link>
-
-                <Card className="shadow-sm border-slate-100 hover:shadow-md transition-shadow bg-white">
-                    <CardContent className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
-                        <div className="p-2.5 bg-emerald-50 text-emerald-500 rounded-xl shrink-0"><CheckCircle2 className="w-5 h-5" /></div>
-                        <div className="min-w-0"><p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Approved</p><h3 className="font-bold text-2xl text-slate-900">{approvedCount}</h3></div>
-                    </CardContent>
-                </Card>
-
-                <Link href="/guide/student-files" className="block group">
-                    <Card className="shadow-sm border-slate-100 hover:shadow-md hover:border-violet-200 transition-all h-full bg-white">
-                        <CardContent className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
-                            <div className="p-2.5 bg-violet-50 text-violet-500 rounded-xl shrink-0 group-hover:bg-violet-100 transition-colors"><FolderOpen className="w-5 h-5" /></div>
-                            <div className="min-w-0"><p className="text-[11px] text-slate-500 font-medium mb-0.5 uppercase tracking-wider">Files</p><h3 className="font-bold text-2xl text-slate-900">{fileCount}</h3></div>
-                        </CardContent>
-                    </Card>
-                </Link>
-            </div>
-
             {/* Quick Links */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Link href="/guide/pending-requests" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-amber-200 hover:shadow-md transition-all group">
@@ -109,33 +74,40 @@ export default function GuideDashboard() {
                 </Link>
             </div>
 
-            {/* Recent Activity */}
-            <div className="space-y-4 pt-2">
-                <div>
-                    <h2 className="text-lg font-semibold text-slate-800">Recent Activity</h2>
-                    <p className="text-sm text-slate-500 mt-0.5">Latest project updates from your students</p>
+            {/* Recent Activity + Announcements Widget */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4 pt-2">
+                    <div>
+                        <h2 className="text-lg font-semibold text-slate-800">Recent Activity</h2>
+                        <p className="text-sm text-slate-500 mt-0.5">Latest project updates from your students</p>
+                    </div>
+
+                    <div className="space-y-3">
+                        {recentActivity.length === 0 ? (
+                            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 text-center text-slate-400">
+                                <p className="text-sm">No recent activity yet.</p>
+                            </div>
+                        ) : (
+                            recentActivity.map((p) => (
+                                <Link key={p._id} href="/guide/assigned-students" className="flex items-start gap-4 p-4 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-blue-100 hover:shadow-md transition-all cursor-pointer group">
+                                    <div className="mt-0.5 w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 group-hover:text-amber-600 group-hover:bg-amber-100 transition-colors shrink-0">
+                                        <ArrowUpRight className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-700">
+                                            <span className="text-slate-900 font-semibold">{p.studentName}</span> submitted &quot;{p.title}&quot; — Status: <span className="font-semibold">{p.status}</span>
+                                        </p>
+                                        <p className="text-xs text-slate-400 mt-1.5">{p.submittedDate || new Date(p.createdAt || "").toLocaleDateString()}</p>
+                                    </div>
+                                </Link>
+                            ))
+                        )}
+                    </div>
                 </div>
 
-                <div className="space-y-3">
-                    {recentActivity.length === 0 ? (
-                        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 text-center text-slate-400">
-                            <p className="text-sm">No recent activity yet.</p>
-                        </div>
-                    ) : (
-                        recentActivity.map((p) => (
-                            <Link key={p._id} href="/guide/assigned-students" className="flex items-start gap-4 p-4 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-blue-100 hover:shadow-md transition-all cursor-pointer group">
-                                <div className="mt-0.5 w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 group-hover:text-amber-600 group-hover:bg-amber-100 transition-colors shrink-0">
-                                    <ArrowUpRight className="w-4 h-4" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-700">
-                                        <span className="text-slate-900 font-semibold">{p.studentName}</span> submitted &quot;{p.title}&quot; — Status: <span className="font-semibold">{p.status}</span>
-                                    </p>
-                                    <p className="text-xs text-slate-400 mt-1.5">{p.submittedDate || new Date(p.createdAt || "").toLocaleDateString()}</p>
-                                </div>
-                            </Link>
-                        ))
-                    )}
+                {/* Announcements Widget */}
+                <div>
+                    <NoticeWidget role="guide" />
                 </div>
             </div>
         </div>

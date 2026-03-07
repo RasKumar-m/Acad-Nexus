@@ -41,6 +41,7 @@ import { useProposals } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
 import { useUploadThing } from "@/lib/uploadthing"
 import { ActivityHeatmap } from "@/components/activity-heatmap"
+import { NoticeWidget } from "@/components/NoticeWidget"
 
 // ─── Milestone type ─────────────────────────────────────────────────
 interface MilestoneItem {
@@ -458,6 +459,11 @@ export default function StudentDashboard() {
 
                 {/* Right Column (Smaller) */}
                 <div className="space-y-6">
+
+                    {/* Announcements Widget */}
+                    <div className="h-fit self-start">
+                        <NoticeWidget role="student" />
+                    </div>
 
                     <Card className="shadow-sm border-slate-100 bg-white">
                         <CardHeader className="pb-2">
