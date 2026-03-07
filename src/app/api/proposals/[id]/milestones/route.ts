@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
+import { requireAuth, requireRole } from "@/lib/auth-guard"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -40,6 +41,9 @@ function serialiseMilestones(milestones: unknown): Array<Record<string, unknown>
 
 // GET /api/proposals/[id]/milestones — list milestones for a proposal
 export async function GET(_req: NextRequest, context: RouteContext) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params
@@ -58,8 +62,11 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     }
 }
 
-// POST /api/proposals/[id]/milestones — create a new milestone (guide)
+// POST /api/proposals/[id]/milestones — create a new milestone (guide/admin)
 export async function POST(req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("guide", "admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params

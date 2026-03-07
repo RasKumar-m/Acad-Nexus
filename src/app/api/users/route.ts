@@ -8,9 +8,13 @@ import {
     validateName,
     validatePassword,
 } from "@/lib/validation"
+import { requireRole } from "@/lib/auth-guard"
 
-// GET /api/users?role=student|guide|admin  — list users, optional role filter
+// GET /api/users?role=student|guide|admin  — list users (admin only)
 export async function GET(req: NextRequest) {
+    const { res } = await requireRole("admin")
+    if (res) return res
+
     try {
         await dbConnect()
 
@@ -28,8 +32,11 @@ export async function GET(req: NextRequest) {
     }
 }
 
-// POST /api/users — create a new user (admin action)
+// POST /api/users — create a new user (admin only)
 export async function POST(req: NextRequest) {
+    const { res } = await requireRole("admin")
+    if (res) return res
+
     try {
         await dbConnect()
 

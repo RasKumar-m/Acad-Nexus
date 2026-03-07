@@ -52,7 +52,7 @@ export default function GuideDashboard() {
                 <div className="relative z-10">
                     <p className="text-emerald-200 text-sm font-medium mb-1">Welcome back, Guide</p>
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{user?.name || "Teacher Dashboard"}</h1>
-                    <p className="text-emerald-100/80 max-w-xl text-sm">Manage your students and provide guidance on their final year projects.</p>
+                    <p className="text-emerald-100/80 max-w-xl text-sm">Manage your students and provide guidance on their academic projects.</p>
                 </div>
                 <div className="absolute -right-10 -top-10 w-60 h-60 bg-white/5 rounded-full blur-2xl" />
                 <div className="absolute -right-5 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-xl" />

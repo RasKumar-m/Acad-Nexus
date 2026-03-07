@@ -8,13 +8,17 @@ import {
     validateName,
     validatePassword,
 } from "@/lib/validation"
+import { requireRole } from "@/lib/auth-guard"
 
 interface RouteContext {
     params: Promise<{ id: string }>
 }
 
-// PATCH /api/users/[id] — update user fields
+// PATCH /api/users/[id] — update user fields (admin only)
 export async function PATCH(req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params
@@ -86,8 +90,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 }
 
-// DELETE /api/users/[id] — delete user
+// DELETE /api/users/[id] — delete user (admin only)
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params

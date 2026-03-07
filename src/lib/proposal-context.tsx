@@ -39,6 +39,8 @@ interface ProposalContextType {
     loading: boolean
     refreshProposals: () => Promise<void>
     addProposal: (title: string, description: string, studentName: string, studentEmail: string, studentId: string, attachedFileUrl?: string, attachedFileType?: string) => Promise<Proposal>
+    editProposal: (id: string, updates: { title?: string; description?: string }) => Promise<void>
+    deleteProposal: (id: string) => Promise<void>
     updateProposalStatus: (id: string, status: ProposalStatus, remarkFrom: string, remarkRole: "Admin" | "Teacher", remarkMessage: string) => Promise<void>
     addRemark: (id: string, from: string, fromRole: "Admin" | "Teacher", message: string) => Promise<void>
     getProposalsByStudent: (email: string) => Proposal[]
@@ -95,6 +97,8 @@ const ProposalContext = React.createContext<ProposalContextType>({
     loading: true,
     refreshProposals: async () => {},
     addProposal: async () => ({} as Proposal),
+    editProposal: async () => {},
+    deleteProposal: async () => {},
     updateProposalStatus: async () => {},
     addRemark: async () => {},
     getProposalsByStudent: () => [],
@@ -161,6 +165,32 @@ export function ProposalProvider({ children }: { children: React.ReactNode }) {
             } catch (err) {
                 console.error("Failed to create notification:", err)
             }
+        },
+        []
+    )
+
+    // ── Edit proposal ───────────────────────────────────────────────
+    const editProposal = React.useCallback(
+        async (id: string, updates: { title?: string; description?: string }) => {
+            const res = await fetch(`/api/proposals/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(updates),
+            })
+            if (!res.ok) throw new Error("Failed to edit proposal")
+            const raw: Record<string, unknown> = await res.json()
+            const updated = normalise(raw)
+            setProposals((prev) => prev.map((p) => (p._id === id ? updated : p)))
+        },
+        []
+    )
+
+    // ── Delete proposal ─────────────────────────────────────────────
+    const deleteProposal = React.useCallback(
+        async (id: string) => {
+            const res = await fetch(`/api/proposals/${id}`, { method: "DELETE" })
+            if (!res.ok) throw new Error("Failed to delete proposal")
+            setProposals((prev) => prev.filter((p) => p._id !== id))
         },
         []
     )
@@ -243,12 +273,14 @@ export function ProposalProvider({ children }: { children: React.ReactNode }) {
             loading,
             refreshProposals,
             addProposal,
+            editProposal,
+            deleteProposal,
             updateProposalStatus,
             addRemark,
             getProposalsByStudent,
             getProposalById,
         }),
-        [proposals, loading, refreshProposals, addProposal, updateProposalStatus, addRemark, getProposalsByStudent, getProposalById, notifyStudent]
+        [proposals, loading, refreshProposals, addProposal, editProposal, deleteProposal, updateProposalStatus, addRemark, getProposalsByStudent, getProposalById, notifyStudent]
     )
 
     return <ProposalContext.Provider value={value}>{children}</ProposalContext.Provider>

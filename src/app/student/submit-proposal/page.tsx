@@ -64,7 +64,7 @@ function remarkActionBadge(action?: string) {
 // ─── Page ───────────────────────────────────────────────────────────
 export default function SubmitProposalPage() {
     const { user } = useAuth()
-    const { addProposal, getProposalsByStudent } = useProposals()
+    const { addProposal, editProposal, deleteProposal, getProposalsByStudent } = useProposals()
 
     const [title, setTitle] = React.useState("")
     const [description, setDescription] = React.useState("")
@@ -73,6 +73,18 @@ export default function SubmitProposalPage() {
     const [fileType, setFileType] = React.useState("")
     const [confirmOpen, setConfirmOpen] = React.useState(false)
     const [successOpen, setSuccessOpen] = React.useState(false)
+
+    // Edit state
+    const [editOpen, setEditOpen] = React.useState(false)
+    const [editTarget, setEditTarget] = React.useState<string | null>(null)
+    const [editTitle, setEditTitle] = React.useState("")
+    const [editDescription, setEditDescription] = React.useState("")
+    const [editSaving, setEditSaving] = React.useState(false)
+
+    // Delete state
+    const [deleteOpen, setDeleteOpen] = React.useState(false)
+    const [deleteTarget, setDeleteTarget] = React.useState<string | null>(null)
+    const [deleteDeleting, setDeleteDeleting] = React.useState(false)
 
     // Custom upload state
     const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
@@ -118,6 +130,42 @@ export default function SubmitProposalPage() {
         setFileType("")
         setConfirmOpen(false)
         setSuccessOpen(true)
+    }
+
+    function openEdit(proposal: { _id: string; title: string; description: string }) {
+        setEditTarget(proposal._id)
+        setEditTitle(proposal.title)
+        setEditDescription(proposal.description)
+        setEditOpen(true)
+    }
+
+    async function handleEditSave() {
+        if (!editTarget) return
+        setEditSaving(true)
+        try {
+            await editProposal(editTarget, {
+                title: editTitle.trim(),
+                description: editDescription.trim(),
+            })
+            setEditOpen(false)
+        } catch {
+            // handled
+        } finally {
+            setEditSaving(false)
+        }
+    }
+
+    async function handleDelete() {
+        if (!deleteTarget) return
+        setDeleteDeleting(true)
+        try {
+            await deleteProposal(deleteTarget)
+            setDeleteOpen(false)
+        } catch {
+            // handled
+        } finally {
+            setDeleteDeleting(false)
+        }
     }
 
     return (
@@ -327,6 +375,28 @@ export default function SubmitProposalPage() {
                             </Badge>
                         </div>
 
+                        {/* Edit / Delete actions — only enabled for pending proposals */}
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                                disabled={proposal.status !== "pending"}
+                                onClick={() => openEdit(proposal)}
+                            >
+                                <Edit3 className="w-3.5 h-3.5" /> Edit
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                                disabled={proposal.status !== "pending"}
+                                onClick={() => { setDeleteTarget(proposal._id); setDeleteOpen(true) }}
+                            >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                            </Button>
+                        </div>
+
                         <Separator />
 
                         <div className="space-y-4">
@@ -473,6 +543,62 @@ export default function SubmitProposalPage() {
                             Done
                         </Button>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ─── Edit Proposal Dialog ────────────────────── */}
+            <Dialog open={editOpen} onOpenChange={(open) => { if (!editSaving) setEditOpen(open) }}>
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg flex items-center gap-2">
+                            <Edit3 className="w-5 h-5 text-blue-600" />
+                            Edit Proposal
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label className="font-semibold text-sm text-slate-700">Project Title</Label>
+                            <Input className="bg-white" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="font-semibold text-sm text-slate-700">Project Description</Label>
+                            <textarea
+                                rows={5}
+                                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <DialogClose asChild><Button variant="outline" disabled={editSaving}>Cancel</Button></DialogClose>
+                        <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" disabled={editSaving || !editTitle.trim() || editDescription.trim().length < 20} onClick={handleEditSave}>
+                            {editSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <CheckCircle2 className="w-4 h-4" /> Save Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ─── Delete Proposal Dialog ─────────────────────── */}
+            <Dialog open={deleteOpen} onOpenChange={(open) => { if (!deleteDeleting) setDeleteOpen(open) }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                            Delete Proposal
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-3 space-y-3">
+                        <p className="text-sm text-slate-600">Are you sure you want to delete this proposal? This action cannot be undone.</p>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <DialogClose asChild><Button variant="outline" disabled={deleteDeleting}>Cancel</Button></DialogClose>
+                        <Button className="gap-1.5 bg-red-600 hover:bg-red-700 text-white" disabled={deleteDeleting} onClick={handleDelete}>
+                            {deleteDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <Trash2 className="w-4 h-4" /> Delete
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

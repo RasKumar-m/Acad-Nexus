@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Megaphone, ChevronDown } from "lucide-react"
+import { Megaphone } from "lucide-react"
 import Link from "next/link"
 
 interface Circular {
@@ -22,7 +22,6 @@ interface NoticeWidgetProps {
 export function NoticeWidget({ role }: NoticeWidgetProps) {
     const [circulars, setCirculars] = React.useState<Circular[]>([])
     const scrollRef = React.useRef<HTMLDivElement>(null)
-    const [isAtBottom, setIsAtBottom] = React.useState(false)
 
     const audience = role === "student" ? "student" : "guide"
     const viewAllHref = role === "student" ? "/student/notifications" : "/guide/announcements"
@@ -33,18 +32,6 @@ export function NoticeWidget({ role }: NoticeWidgetProps) {
             .then((data: Circular[]) => setCirculars(data))
             .catch(() => {})
     }, [audience])
-
-    React.useEffect(() => {
-        const el = scrollRef.current
-        if (!el) return
-        function handleScroll() {
-            if (!el) return
-            setIsAtBottom(el.scrollTop + el.clientHeight >= el.scrollHeight - 5)
-        }
-        el.addEventListener("scroll", handleScroll)
-        handleScroll()
-        return () => el.removeEventListener("scroll", handleScroll)
-    }, [circulars])
 
     if (circulars.length === 0) return null
 
@@ -71,45 +58,33 @@ export function NoticeWidget({ role }: NoticeWidgetProps) {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="relative pb-3">
-                {/* Snap-scroll container — adaptive height, scrolls when content is tall */}
+            <CardContent className="pb-3">
                 <div
                     ref={scrollRef}
-                    className="max-h-44 overflow-y-auto snap-y snap-mandatory scrollbar-hide"
+                    className="max-h-52 overflow-y-auto space-y-2 scrollbar-hide"
                 >
                     {circulars.slice(0, 5).map((c, idx) => (
                         <div
                             key={c._id}
-                            className="snap-start min-h-[11rem] flex items-center px-1"
+                            className={`p-3.5 rounded-xl border transition-all ${
+                                idx === 0
+                                    ? "bg-amber-50 border-amber-200 ring-1 ring-amber-200/60"
+                                    : "bg-slate-50 border-slate-200 hover:border-amber-200"
+                            }`}
                         >
-                            <div
-                                className={`w-full p-4 rounded-xl border transition-all ${
-                                    idx === 0
-                                        ? "bg-amber-50 border-amber-200 ring-1 ring-amber-200/60"
-                                        : "bg-slate-50 border-slate-200 hover:border-amber-200"
-                                }`}
-                            >
-                                <div className="flex items-start justify-between gap-2 mb-2">
-                                    <h4 className="text-sm font-semibold text-slate-800 line-clamp-1">{c.title}</h4>
-                                    <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
-                                        {new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-slate-600 whitespace-pre-line line-clamp-3 leading-relaxed">{c.message}</p>
-                                {c.postedBy && (
-                                    <p className="text-[10px] text-slate-400 mt-2">— {c.postedBy}</p>
-                                )}
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <h4 className="text-sm font-semibold text-slate-800 line-clamp-1">{c.title}</h4>
+                                <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
+                                    {new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                </span>
                             </div>
+                            <p className="text-xs text-slate-600 whitespace-pre-line line-clamp-2 leading-relaxed">{c.message}</p>
+                            {c.postedBy && (
+                                <p className="text-[10px] text-slate-400 mt-1.5">— {c.postedBy}</p>
+                            )}
                         </div>
                     ))}
                 </div>
-
-                {/* Bounce arrow indicator — hidden when scrolled to bottom */}
-                {circulars.length > 1 && !isAtBottom && (
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
-                        <ChevronDown className="w-4 h-4 text-amber-400 animate-bounce" />
-                    </div>
-                )}
             </CardContent>
         </Card>
     )

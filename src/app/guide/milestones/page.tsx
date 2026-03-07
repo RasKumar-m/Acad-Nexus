@@ -39,9 +39,12 @@ import {
     FileText,
     ExternalLink,
     Download,
+    LayoutGrid,
+    TableProperties,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useProposals } from "@/lib/proposal-context"
+import { MilestoneKanban } from "@/components/milestone-kanban"
 
 // ─── Types ──────────────────────────────────────────────────────────
 interface MilestoneItem {
@@ -98,6 +101,9 @@ export default function GuideMilestonesPage() {
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [deleteTarget, setDeleteTarget] = React.useState<{ proposalId: string; milestone: MilestoneItem } | null>(null)
     const [deleting, setDeleting] = React.useState(false)
+
+    // View toggle: "table" | "kanban"
+    const [view, setView] = React.useState<"table" | "kanban">("kanban")
 
     // ── Fetch milestones for a proposal ─────────────────────────────
     const fetchMilestones = React.useCallback(async (proposalId: string) => {
@@ -220,6 +226,58 @@ export default function GuideMilestonesPage() {
         ? allMilestones.filter((item) => item.proposal._id === selectedProposalId)
         : allMilestones
 
+    // ── Kanban data (flat list with proposalId + studentName attached) ──
+    const kanbanMilestones = React.useMemo(() => {
+        const filtered = selectedProposalId && selectedProposalId !== "all"
+            ? allMilestones.filter((item) => item.proposal._id === selectedProposalId)
+            : allMilestones
+        return filtered.map(({ proposal, milestone }) => ({
+            ...milestone,
+            proposalId: proposal._id,
+            studentName: proposal.studentName,
+        }))
+    }, [allMilestones, selectedProposalId])
+
+    // ── Kanban status change (optimistic update + PATCH) ────────────
+    async function handleKanbanStatusChange(
+        proposalId: string,
+        milestoneId: string,
+        newStatus: "pending" | "submitted" | "reviewed"
+    ) {
+        // Optimistic: update local state immediately
+        setMilestones((prev) => {
+            const list = prev[proposalId]
+            if (!list) return prev
+            return {
+                ...prev,
+                [proposalId]: list.map((m) =>
+                    m._id === milestoneId ? { ...m, status: newStatus } : m
+                ),
+            }
+        })
+
+        // Persist to DB
+        try {
+            const res = await fetch(
+                `/api/proposals/${proposalId}/milestones/${milestoneId}`,
+                {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: newStatus }),
+                }
+            )
+            if (res.ok) {
+                const updated: MilestoneItem[] = await res.json()
+                setMilestones((prev) => ({ ...prev, [proposalId]: updated }))
+            } else {
+                // Revert on failure
+                fetchMilestones(proposalId)
+            }
+        } catch {
+            fetchMilestones(proposalId)
+        }
+    }
+
     if (proposalsLoading) {
         return (
             <div className="flex items-center justify-center min-h-96">
@@ -232,15 +290,135 @@ export default function GuideMilestonesPage() {
         <div className="flex flex-col gap-4 sm:gap-6 w-full px-4 sm:px-0 max-w-6xl mx-auto">
             {/* ─── Header ──────────────────────────────────────────── */}
             <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-100 shadow-sm">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2 flex-wrap">
-                    <Milestone className="w-5 sm:w-6 h-5 sm:h-6 text-emerald-600 flex-shrink-0" />
-                    <span>Milestone Dashboard</span>
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-500 mt-2">
-                    Create milestones for your assigned students and track their progress.
-                </p>
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2 flex-wrap">
+                            <Milestone className="w-5 sm:w-6 h-5 sm:h-6 text-emerald-600 flex-shrink-0" />
+                            <span>Milestone Dashboard</span>
+                        </h1>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-2">
+                            Create milestones for your assigned students and track their progress.
+                        </p>
+                    </div>
+
+                    {/* View toggle */}
+                    <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setView("kanban")}
+                            className={`h-8 px-3 text-xs gap-1.5 rounded-md ${
+                                view === "kanban"
+                                    ? "bg-white text-slate-900 shadow-sm hover:bg-white"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-transparent"
+                            }`}
+                        >
+                            <LayoutGrid className="w-3.5 h-3.5" />
+                            Board
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setView("table")}
+                            className={`h-8 px-3 text-xs gap-1.5 rounded-md ${
+                                view === "table"
+                                    ? "bg-white text-slate-900 shadow-sm hover:bg-white"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-transparent"
+                            }`}
+                        >
+                            <TableProperties className="w-3.5 h-3.5" />
+                            Table
+                        </Button>
+                    </div>
+                </div>
             </div>
 
+            {/* ─── Student filter (shared between views) ─────────── */}
+            <div className="flex items-center gap-3">
+                <Select value={selectedProposalId} onValueChange={setSelectedProposalId}>
+                    <SelectTrigger className="w-full sm:w-64 text-xs sm:text-sm">
+                        <SelectValue placeholder="All Students" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Students</SelectItem>
+                        {myProposals.map((p) => (
+                            <SelectItem key={p._id} value={p._id}>
+                                {p.studentName}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* ─── Kanban View ─────────────────────────────────────── */}
+            {view === "kanban" && (
+                <div className="flex flex-col gap-4 sm:gap-6">
+                    <MilestoneKanban
+                        milestones={kanbanMilestones}
+                        onStatusChange={handleKanbanStatusChange}
+                    />
+
+                    {/* Create form below the board */}
+                    <Card className="shadow-sm border-slate-100 bg-white max-w-lg">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2 text-slate-800">
+                                <Plus className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                <span>New Milestone</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="px-4 sm:px-6 pb-6">
+                            {myProposals.length === 0 && (
+                                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs sm:text-sm text-amber-800">
+                                    No approved or completed assigned projects found. Approve a student project first.
+                                </div>
+                            )}
+                            <form onSubmit={handleCreate} className="space-y-3 sm:space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ms-student-k" className="text-xs sm:text-sm">Student / Project</Label>
+                                        <Select value={formProposalId} onValueChange={setFormProposalId}>
+                                            <SelectTrigger id="ms-student-k" disabled={myProposals.length === 0} className="text-xs sm:text-sm">
+                                                <SelectValue placeholder="Select a student" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {myProposals.map((p) => (
+                                                    <SelectItem key={p._id} value={p._id} className="text-xs sm:text-sm">
+                                                        {p.studentName} — {p.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ms-title-k" className="text-xs sm:text-sm">Milestone Title</Label>
+                                        <Input id="ms-title-k" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="e.g. Literature Review" className="text-xs sm:text-sm" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ms-desc-k" className="text-xs sm:text-sm">Description</Label>
+                                        <textarea id="ms-desc-k" value={formDesc} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormDesc(e.target.value)} placeholder="What the student needs to deliver" rows={2} className="flex min-h-16 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ms-due-k" className="text-xs sm:text-sm">Due Date</Label>
+                                        <Input id="ms-due-k" type="date" value={formDueDate} onChange={(e) => setFormDueDate(e.target.value)} className="text-xs sm:text-sm" />
+                                    </div>
+                                </div>
+                                {formError && (
+                                    <p className="text-xs sm:text-sm text-red-600 bg-red-50 px-2 sm:px-3 py-2 rounded-lg">{formError}</p>
+                                )}
+                                <Button type="submit" disabled={creating || myProposals.length === 0} className="text-xs sm:text-sm py-2">
+                                    {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                                    Create Milestone
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ─── Table View (original layout) ───────────────────── */}
+            {view === "table" && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 {/* ─── Create Milestone Form ───────────────────────── */}
                 <Card className="shadow-sm border-slate-100 bg-white lg:col-span-1">
@@ -322,24 +500,9 @@ export default function GuideMilestonesPage() {
                 {/* ─── Milestones Table ────────────────────────────── */}
                 <Card className="shadow-sm border-slate-100 bg-white lg:col-span-2">
                     <CardHeader className="pb-3">
-                        <div className="flex flex-col gap-3">
-                            <CardTitle className="text-sm sm:text-base font-semibold text-slate-800">
-                                Active Milestones
-                            </CardTitle>
-                            <Select value={selectedProposalId} onValueChange={setSelectedProposalId}>
-                                <SelectTrigger className="w-full text-xs sm:text-sm">
-                                    <SelectValue placeholder="All Students" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Students</SelectItem>
-                                    {myProposals.map((p) => (
-                                        <SelectItem key={p._id} value={p._id}>
-                                            {p.studentName}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <CardTitle className="text-sm sm:text-base font-semibold text-slate-800">
+                            Active Milestones
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {filteredMilestones.length === 0 ? (
@@ -444,6 +607,7 @@ export default function GuideMilestonesPage() {
                     </CardContent>
                 </Card>
             </div>
+            )}
 
             {/* ─── Delete Confirmation ─────────────────────────────── */}
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

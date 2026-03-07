@@ -6,7 +6,7 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"], display: 'swap' });
 
 export const metadata: Metadata = {
-  title: "Acad Nexus — FYP Management",
+  title: "Acad Nexus — Academic Project Management",
   description: "Academic Project Management & Supervision Platform",
 };
 

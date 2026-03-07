@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
+import { requireAuth, requireRole } from "@/lib/auth-guard"
 
 interface RouteContext {
     params: Promise<{ id: string; milestoneId: string }>
@@ -37,8 +38,11 @@ function serialiseMilestones(milestones: unknown): Array<Record<string, unknown>
     })
 }
 
-// PATCH /api/proposals/[id]/milestones/[milestoneId] — submit file to milestone (student) or review (guide)
+// PATCH /api/proposals/[id]/milestones/[milestoneId] — submit file (student) or update status (guide)
 export async function PATCH(req: NextRequest, context: RouteContext) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
         const { id, milestoneId } = await context.params
@@ -54,9 +58,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             update["milestones.$.submittedAt"] = new Date()
         }
 
-        // Guide marking as reviewed
-        if (body.status === "reviewed") {
-            update["milestones.$.status"] = "reviewed"
+        // Guide updating milestone status (e.g. reviewed, pending, submitted)
+        const validStatuses = ["pending", "submitted", "reviewed"]
+        if (body.status && validStatuses.includes(body.status)) {
+            update["milestones.$.status"] = body.status
         }
 
         if (Object.keys(update).length === 0) {
@@ -80,8 +85,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 }
 
-// DELETE /api/proposals/[id]/milestones/[milestoneId] — remove a milestone (guide)
+// DELETE /api/proposals/[id]/milestones/[milestoneId] — remove a milestone (guide/admin)
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("guide", "admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id, milestoneId } = await context.params

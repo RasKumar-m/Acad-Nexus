@@ -189,7 +189,7 @@ export default function StudentDashboard() {
                 <div className="relative z-10">
                     <p className="text-blue-200 text-sm font-medium mb-1">Welcome back</p>
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">{user?.name ?? "Student"}</h1>
-                    <p className="text-blue-100/80 max-w-xl text-sm">Here&apos;s your project overview, recent updates, and tasks. Let&apos;s make progress on your Final Year Project.</p>
+                    <p className="text-blue-100/80 max-w-xl text-sm">Here&apos;s your project overview, recent updates, and tasks. Let&apos;s make progress on your academic project.</p>
                 </div>
                 <div className="absolute -right-10 -top-10 w-60 h-60 bg-white/5 rounded-full blur-2xl" />
                 <div className="absolute -right-5 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-xl" />
@@ -468,7 +468,6 @@ export default function StudentDashboard() {
                     <Card className="shadow-sm border-slate-100 bg-white">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base font-semibold text-slate-800">Consistency Heatmap</CardTitle>
-                            <CardDescription>Your daily submission activity — like GitHub&apos;s contribution graph.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <ActivityHeatmap activity={activityMap} days={120} title="Submission Activity" />

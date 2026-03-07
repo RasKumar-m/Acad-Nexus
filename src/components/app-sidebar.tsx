@@ -90,7 +90,7 @@ export function AppSidebar({ role, ...props }: React.ComponentProps<typeof Sideb
                                     <span className="truncate font-bold text-sm tracking-tight text-slate-800">
                                         Acad Nexus
                                     </span>
-                                    <span className="truncate text-[11px] text-muted-foreground">FYP Management</span>
+                                    <span className="truncate text-[11px] text-muted-foreground">Academic Project Management</span>
                                 </div>
                             </Link>
                         </SidebarMenuButton>

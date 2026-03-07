@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
+import { requireAuth, requireRole } from "@/lib/auth-guard"
 
 // GET /api/proposals  — list proposals (optional ?email= filter)
 export async function GET(req: NextRequest) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
 
@@ -18,8 +22,11 @@ export async function GET(req: NextRequest) {
     }
 }
 
-// POST /api/proposals — create a new proposal
+// POST /api/proposals — create a new proposal (student only)
 export async function POST(req: NextRequest) {
+    const { session, res } = await requireRole("student")
+    if (res) return res
+
     try {
         await dbConnect()
 
@@ -33,6 +40,11 @@ export async function POST(req: NextRequest) {
             attachedFileUrl,
             attachedFileType,
         } = body
+
+        // Students can only create proposals for themselves
+        if (studentId !== session.user.id) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
 
         if (!title || !description || !studentId || !studentName || !studentEmail) {
             return NextResponse.json(

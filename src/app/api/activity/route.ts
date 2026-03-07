@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
+import { requireAuth } from "@/lib/auth-guard"
 
 function toDateKey(date: Date): string {
     return date.toISOString().slice(0, 10)
@@ -18,6 +19,9 @@ function buildRange(days: number): string[] {
 }
 
 export async function GET(req: NextRequest) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
 

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs"
 import dbConnect from "@/lib/mongodb"
 import User from "@/models/User"
 import Proposal from "@/models/Proposal"
+import { requireRole } from "@/lib/auth-guard"
 
 const seedUsers = [
     {
@@ -48,6 +49,9 @@ const seedUsers = [
 ]
 
 export async function GET() {
+    const { res } = await requireRole("admin")
+    if (res) return res
+
     try {
         await dbConnect()
 

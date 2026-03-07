@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Notification from "@/models/Notification"
+import { requireAuth, requireRole } from "@/lib/auth-guard"
 
 // GET /api/notifications?email=...&unread=true&audience=...&role=...  — list notifications
 export async function GET(req: NextRequest) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
 
@@ -49,8 +53,11 @@ export async function GET(req: NextRequest) {
     }
 }
 
-// POST /api/notifications — create a notification (personal or circular)
+// POST /api/notifications — create a notification (admin/guide only)
 export async function POST(req: NextRequest) {
+    const { res } = await requireRole("guide", "admin")
+    if (res) return res
+
     try {
         await dbConnect()
 
@@ -94,6 +101,9 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/notifications — mark all as read for an email
 export async function PATCH(req: NextRequest) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
 

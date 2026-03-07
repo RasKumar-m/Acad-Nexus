@@ -166,7 +166,7 @@ export function DashboardLayout({
                             </div>
                             <div className="hidden sm:block">
                                 <h1 className="text-sm font-bold text-white leading-tight tracking-tight">Acad Nexus</h1>
-                                <p className="text-[10px] text-white/70 leading-tight font-medium">FYP Management</p>
+                                <p className="text-[10px] text-white/70 leading-tight font-medium">Academic Project Management</p>
                             </div>
                             <h1 className="text-sm font-bold text-white sm:hidden">Acad Nexus</h1>
                         </Link>
@@ -243,7 +243,7 @@ export function DashboardLayout({
                                 <SheetTitle className="text-white text-base font-bold leading-tight">
                                     Acad Nexus
                                 </SheetTitle>
-                                <p className="text-white/70 text-xs font-medium">FYP Management</p>
+                                <p className="text-white/70 text-xs font-medium">Academic Project Management</p>
                             </div>
                         </div>
                     </SheetHeader>

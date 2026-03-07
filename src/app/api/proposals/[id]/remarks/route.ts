@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
+import { requireRole } from "@/lib/auth-guard"
 
 interface RouteContext {
     params: Promise<{ id: string }>
 }
 
-// POST /api/proposals/[id]/remarks — add a remark to a proposal
+// POST /api/proposals/[id]/remarks — add a remark (guide/admin only)
 export async function POST(req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("guide", "admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params

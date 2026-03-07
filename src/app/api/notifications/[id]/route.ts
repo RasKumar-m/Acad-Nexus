@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Notification from "@/models/Notification"
+import { requireAuth, requireRole } from "@/lib/auth-guard"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -8,6 +9,9 @@ interface RouteContext {
 
 // PATCH /api/notifications/[id] — mark single notification as read
 export async function PATCH(_req: NextRequest, context: RouteContext) {
+    const { res } = await requireAuth()
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params
@@ -29,8 +33,11 @@ export async function PATCH(_req: NextRequest, context: RouteContext) {
     }
 }
 
-// PUT /api/notifications/[id] — update a circular's title, message, or audience
+// PUT /api/notifications/[id] — update a circular (guide/admin only)
 export async function PUT(req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("guide", "admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params
@@ -66,8 +73,11 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
 }
 
-// DELETE /api/notifications/[id] — delete a notification
+// DELETE /api/notifications/[id] — delete a notification (guide/admin only)
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+    const { res } = await requireRole("guide", "admin")
+    if (res) return res
+
     try {
         await dbConnect()
         const { id } = await context.params
