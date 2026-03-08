@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { createMilestoneSchema, parseBody } from "@/lib/zod-schemas"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -16,6 +17,8 @@ interface MilestoneDocLike {
     status?: unknown
     fileUrl?: unknown
     fileName?: unknown
+    submissionLink?: unknown
+    linkType?: unknown
     submittedAt?: unknown
     createdAt?: unknown
 }
@@ -33,6 +36,8 @@ function serialiseMilestones(milestones: unknown): Array<Record<string, unknown>
             status: String(m.status ?? "pending"),
             fileUrl: m.fileUrl ? String(m.fileUrl) : null,
             fileName: m.fileName ? String(m.fileName) : null,
+            submissionLink: m.submissionLink ? String(m.submissionLink) : null,
+            linkType: m.linkType ? String(m.linkType) : null,
             submittedAt: m.submittedAt ? new Date(String(m.submittedAt)).toISOString() : null,
             createdAt: m.createdAt ? new Date(String(m.createdAt)).toISOString() : null,
         }
@@ -70,34 +75,19 @@ export async function POST(req: NextRequest, context: RouteContext) {
     try {
         await dbConnect()
         const { id } = await context.params
-        const body = await req.json()
-        const { title, description, dueDate } = body
-
-        if (!title || !description || !dueDate) {
-            return NextResponse.json(
-                { error: "title, description, and dueDate are required" },
-                { status: 400 }
-            )
-        }
-
-        // Validate date format
-        try {
-            new Date(dueDate)
-        } catch (_) {
-            return NextResponse.json(
-                { error: "Invalid dueDate format" },
-                { status: 400 }
-            )
-        }
+        const raw = await req.json()
+        const parsed = parseBody(createMilestoneSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         const proposal = await Proposal.findByIdAndUpdate(
             id,
             {
                 $push: {
                     milestones: {
-                        title: String(title).trim(),
-                        description: String(description).trim(),
-                        dueDate: String(dueDate),
+                        title: body.title,
+                        description: body.description,
+                        dueDate: body.dueDate,
                         status: "pending",
                         fileUrl: null,
                         fileName: null,
@@ -119,7 +109,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
                 userEmail: proposal.studentEmail,
                 type: "deadline",
                 title: "New Milestone Assigned",
-                message: `A new milestone "${title}" (due ${dueDate}) has been added to your project "${proposal.title}".`,
+                message: `A new milestone "${body.title}" (due ${body.dueDate}) has been added to your project "${proposal.title}".`,
                 relatedId: String(proposal._id),
             })
         } catch (_) {

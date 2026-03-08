@@ -22,6 +22,7 @@ import {
     Clock,
     CheckCircle2,
     ExternalLink,
+    Link2,
 } from "lucide-react"
 import { useProposals } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
@@ -35,6 +36,8 @@ interface MilestoneItem {
     status: "pending" | "submitted" | "reviewed"
     fileUrl: string | null
     fileName: string | null
+    submissionLink: string | null
+    linkType: string | null
     submittedAt: string | null
     createdAt: string | null
 }
@@ -94,6 +97,11 @@ export default function StudentMilestonesPage() {
     const [uploadError, setUploadError] = React.useState("")
     const fileInputRef = React.useRef<HTMLInputElement>(null)
 
+    // Link submission states
+    const [submissionLink, setSubmissionLink] = React.useState("")
+    const [linkType, setLinkType] = React.useState<"github" | "drive" | "figma" | "other">("github")
+    const [submittingLink, setSubmittingLink] = React.useState(false)
+
     const { startUpload, isUploading } = useUploadThing("projectFile", {
         onUploadProgress: (p) => setUploadProgress(p),
         onUploadError: (err) => {
@@ -143,6 +151,8 @@ export default function StudentMilestonesPage() {
         setSelectedFile(null)
         setUploadError("")
         setUploadProgress(0)
+        setSubmissionLink("")
+        setLinkType("github")
         setUploadDialogOpen(true)
     }
 
@@ -153,28 +163,22 @@ export default function StudentMilestonesPage() {
         setUploadProgress(0)
 
         try {
-            console.log("Uploading file:", selectedFile.name, "for milestone:", active.milestone.title)
             const uploadRes = await startUpload([selectedFile])
             const file = uploadRes?.[0]
 
             if (!file) {
-                console.error("Upload failed - no file returned")
                 setUploadError("Upload failed. Please try again.")
                 return
             }
 
-            console.log("File uploaded successfully, updating milestone...")
             const patchRes = await fetch(`/api/proposals/${active.proposalId}/milestones/${active.milestone._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ fileUrl: file.ufsUrl ?? file.url, fileName: file.name }),
             })
 
-            console.log("Patch response status:", patchRes.status)
-
             if (!patchRes.ok) {
                 const payload = await patchRes.json().catch(() => ({}))
-                console.error("Patch error:", payload)
                 setUploadError(payload.error ?? "Failed to submit milestone.")
                 return
             }
@@ -194,9 +198,49 @@ export default function StudentMilestonesPage() {
 
             setUploadDialogOpen(false)
             setSelectedFile(null)
-        } catch (err) {
-            console.error("Submission error:", err)
+        } catch {
             setUploadError("Network error. Please try again.")
+        }
+    }
+
+    async function submitLink() {
+        if (!active || !submissionLink.trim()) return
+
+        setUploadError("")
+        setSubmittingLink(true)
+
+        try {
+            const patchRes = await fetch(`/api/proposals/${active.proposalId}/milestones/${active.milestone._id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ submissionLink: submissionLink.trim(), linkType }),
+            })
+
+            if (!patchRes.ok) {
+                const payload = await patchRes.json().catch(() => ({}))
+                setUploadError(payload.error ?? "Failed to submit link.")
+                return
+            }
+
+            const updated: MilestoneItem[] = await patchRes.json()
+            setMilestones((prev) => {
+                const withoutProposal = prev.filter((p) => p.proposalId !== active.proposalId)
+                const remapped = updated.map((milestone) => ({
+                    proposalId: active.proposalId,
+                    proposalTitle: active.proposalTitle,
+                    milestone,
+                }))
+                const merged = [...withoutProposal, ...remapped]
+                merged.sort((a, b) => new Date(a.milestone.dueDate).getTime() - new Date(b.milestone.dueDate).getTime())
+                return merged
+            })
+
+            setUploadDialogOpen(false)
+            setSubmissionLink("")
+        } catch {
+            setUploadError("Network error. Please try again.")
+        } finally {
+            setSubmittingLink(false)
         }
     }
 
@@ -314,6 +358,17 @@ export default function StudentMilestonesPage() {
                                                         Open File
                                                     </a>
                                                 )}
+                                                {item.milestone.submissionLink && (
+                                                    <a
+                                                        href={item.milestone.submissionLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline inline-flex items-center gap-1"
+                                                    >
+                                                        <Link2 className="w-3 h-3" />
+                                                        {item.milestone.linkType === "github" ? "GitHub" : item.milestone.linkType === "drive" ? "Drive" : item.milestone.linkType === "figma" ? "Figma" : "Link"}
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -337,7 +392,7 @@ export default function StudentMilestonesPage() {
                     }
                 }}
             >
-                <DialogContent className="mx-4 max-w-md w-full sm:max-w-lg">
+                <DialogContent className="mx-4 max-w-md w-full sm:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle className="text-base sm:text-lg truncate pr-6">Submit: {active?.milestone.title}</DialogTitle>
                     </DialogHeader>
@@ -350,77 +405,141 @@ export default function StudentMilestonesPage() {
                             </p>
                         </div>
 
-                        <div className="border-2 border-dashed border-slate-300 rounded-lg sm:rounded-xl p-4 sm:p-6 text-center">
-                            {selectedFile ? (
-                                <div className="space-y-2">
-                                    <FileText className="w-6 sm:w-8 h-6 sm:h-8 text-indigo-500 mx-auto" />
-                                    <p className="text-xs sm:text-sm font-medium text-slate-800 truncate">{selectedFile.name}</p>
-                                    <p className="text-xs text-slate-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            setSelectedFile(null)
-                                            if (fileInputRef.current) fileInputRef.current.value = ""
-                                        }}
-                                        disabled={isUploading}
-                                        className="text-red-500 hover:text-red-600 text-xs sm:text-sm h-8"
-                                    >
-                                        <X className="w-3.5 h-3.5 mr-1" />
-                                        Remove
-                                    </Button>
+                        {/* Side-by-side: Upload File | Submit Link */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* ── File Upload Panel ── */}
+                            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <CloudUpload className="w-4 h-4 text-indigo-500" />
+                                    Upload File
                                 </div>
-                            ) : (
+
+                                <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center">
+                                    {selectedFile ? (
+                                        <div className="space-y-2">
+                                            <FileText className="w-6 h-6 text-indigo-500 mx-auto" />
+                                            <p className="text-xs font-medium text-slate-800 truncate">{selectedFile.name}</p>
+                                            <p className="text-xs text-slate-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSelectedFile(null)
+                                                    if (fileInputRef.current) fileInputRef.current.value = ""
+                                                }}
+                                                disabled={isUploading}
+                                                className="text-red-500 hover:text-red-600 text-xs h-8"
+                                            >
+                                                <X className="w-3.5 h-3.5 mr-1" />
+                                                Remove
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <CloudUpload className="w-6 h-6 text-slate-400 mx-auto" />
+                                            <p className="text-xs text-slate-600 font-medium">Select a file</p>
+                                            <p className="text-xs text-slate-500">PDF, DOC, PPT, ZIP, etc.</p>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="text-xs h-8"
+                                            >
+                                                Browse Files
+                                            </Button>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                className="hidden"
+                                                accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.rar,.gz,.xlsx,.xls,.txt"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0]
+                                                    if (file) {
+                                                        setSelectedFile(file)
+                                                        setUploadError("")
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {isUploading && (
+                                    <div className="space-y-1.5">
+                                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+                                        </div>
+                                        <p className="text-xs text-slate-600 text-center font-medium">Uploading... {uploadProgress}%</p>
+                                    </div>
+                                )}
+
+                                <Button
+                                    onClick={submitMilestone}
+                                    disabled={!selectedFile || isUploading || submittingLink}
+                                    className="w-full text-xs sm:text-sm"
+                                >
+                                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                                    Upload &amp; Submit
+                                </Button>
+                            </div>
+
+                            {/* ── Link Submission Panel ── */}
+                            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <Link2 className="w-4 h-4 text-emerald-500" />
+                                    Submit Link
+                                </div>
+
                                 <div className="space-y-2">
-                                    <CloudUpload className="w-6 sm:w-8 h-6 sm:h-8 text-slate-400 mx-auto" />
-                                    <p className="text-xs sm:text-sm text-slate-600 font-medium">Select a file to submit</p>
-                                    <p className="text-xs text-slate-500 px-1">PDF, DOC, PPT, ZIP, etc.</p>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="text-xs sm:text-sm h-8"
-                                    >
-                                        <CloudUpload className="w-3.5 h-3.5 mr-1" />
-                                        Browse Files
-                                    </Button>
+                                    <label className="text-xs font-medium text-slate-600">Link Type</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(["github", "drive", "figma", "other"] as const).map((t) => (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                onClick={() => setLinkType(t)}
+                                                className={`text-xs py-1.5 px-2 rounded-lg border transition-all capitalize ${
+                                                    linkType === t
+                                                        ? "border-emerald-400 bg-emerald-50 text-emerald-700 font-medium"
+                                                        : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                                }`}
+                                            >
+                                                {t === "drive" ? "Google Drive" : t === "github" ? "GitHub" : t === "figma" ? "Figma" : "Other"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-600">URL</label>
                                     <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        className="hidden"
-                                        accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.rar,.gz,.xlsx,.xls,.txt"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0]
-                                            if (file) {
-                                                setSelectedFile(file)
-                                                setUploadError("")
-                                            }
-                                        }}
+                                        type="url"
+                                        value={submissionLink}
+                                        onChange={(e) => { setSubmissionLink(e.target.value); setUploadError("") }}
+                                        placeholder="https://github.com/user/repo"
+                                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                     />
                                 </div>
-                            )}
-                        </div>
 
-                        {isUploading && (
-                            <div className="space-y-1.5">
-                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
-                                </div>
-                                <p className="text-xs text-slate-600 text-center font-medium">Uploading... {uploadProgress}%</p>
+                                <Button
+                                    onClick={submitLink}
+                                    disabled={!submissionLink.trim() || submittingLink || isUploading}
+                                    variant="outline"
+                                    className="w-full text-xs sm:text-sm border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                >
+                                    {submittingLink ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Link2 className="w-4 h-4 mr-2" />}
+                                    Submit Link
+                                </Button>
                             </div>
-                        )}
+                        </div>
 
                         {uploadError && <p className="text-xs sm:text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{uploadError}</p>}
                     </div>
 
                     <DialogFooter className="gap-2 pt-2">
                         <DialogClose asChild>
-                            <Button variant="outline" disabled={isUploading} className="text-xs sm:text-sm">Cancel</Button>
+                            <Button variant="outline" disabled={isUploading || submittingLink} className="text-xs sm:text-sm">Cancel</Button>
                         </DialogClose>
-                        <Button onClick={submitMilestone} disabled={!selectedFile || isUploading} className="text-xs sm:text-sm">
-                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
-                            Submit
-                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -34,6 +34,7 @@ import {
     Download,
     CloudUpload,
     X,
+    Link2,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useUploadThing } from "@/lib/uploadthing"
@@ -118,6 +119,11 @@ export default function UploadFilesPage() {
     const [uploadProgress, setUploadProgress] = React.useState(0)
     const [uploadError, setUploadError] = React.useState("")
     const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+    // Link submission state
+    const [linkUrl, setLinkUrl] = React.useState("")
+    const [linkType, setLinkType] = React.useState<"github" | "drive" | "figma" | "other">("github")
+    const [submittingLink, setSubmittingLink] = React.useState(false)
 
     const { startUpload, isUploading } = useUploadThing("projectFile", {
         onUploadProgress: (p) => setUploadProgress(p),
@@ -213,6 +219,43 @@ export default function UploadFilesPage() {
         if (fileInputRef.current) fileInputRef.current.value = ""
     }
 
+    // ── Handle link submission ───────────────────────────────────────
+    async function handleLinkSubmit() {
+        if (!linkUrl.trim() || !user) return
+        setUploadError("")
+        setSubmittingLink(true)
+
+        try {
+            const linkTypeLabels: Record<string, string> = { github: "GitHub", drive: "Google Drive", figma: "Figma", other: "Link" }
+            const res = await fetch("/api/files", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    fileName: `${linkTypeLabels[linkType]} - ${linkUrl.trim().slice(0, 60)}`,
+                    fileUrl: linkUrl.trim(),
+                    category,
+                    fileSize: linkTypeLabels[linkType],
+                    studentId: user.id,
+                    studentName: user.name,
+                    studentEmail: user.email,
+                }),
+            })
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                setUploadError(err.error ?? "Failed to save link.")
+                return
+            }
+            setLinkUrl("")
+            setLinkType("github")
+            fetchFiles()
+            setSuccessOpen(true)
+        } catch {
+            setUploadError("Network error. Please try again.")
+        } finally {
+            setSubmittingLink(false)
+        }
+    }
+
     // ── Delete ──────────────────────────────────────────────────────
     function openDelete(file: UploadedFile) {
         setDeleteTarget(file)
@@ -237,23 +280,23 @@ export default function UploadFilesPage() {
     return (
         <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto">
             {/* ─── Header ─────────────────────────────────────── */}
-            <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-100 shadow-sm">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
                     Upload Project Files
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">
-                    Upload your project documents including reports, presentations, and code files.
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    Upload your project documents including reports, presentations, and code files — or submit a link.
                 </p>
             </div>
 
             {/* ─── Upload Area ─────────────────────────────────── */}
             <Card className="shadow-sm border-slate-100">
-                <CardContent className="p-6 space-y-4">
+                <CardContent className="p-4 sm:p-6 space-y-4">
                     {/* Category selector */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                         <label className="text-sm font-medium text-slate-700">File Category</label>
                         <Select value={category} onValueChange={(v) => setCategory(v as FileCategory)}>
-                            <SelectTrigger className="w-48 bg-white">
+                            <SelectTrigger className="w-full sm:w-48 bg-white">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -264,109 +307,151 @@ export default function UploadFilesPage() {
                         </Select>
                     </div>
 
-                    {/* Custom Upload Dropzone */}
-                    <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-8 transition-colors text-center">
-                        {!selectedFile && !isUploading ? (
-                            <div className="flex flex-col items-center gap-3">
-                                <div className="p-4 bg-blue-50 rounded-full">
-                                    <CloudUpload className="w-8 h-8 text-blue-500" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-700">
-                                        Choose a file to upload
-                                    </p>
-                                    <p className="text-xs text-slate-400 mt-1">
-                                        PDF, DOC, DOCX, PPT, PPTX, ZIP, RAR &middot; Max 32MB
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <Upload className="w-4 h-4" />
-                                    Browse Files
-                                </Button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept={ACCEPTED_TYPES}
-                                    className="hidden"
-                                    onChange={handleFileSelect}
-                                />
+                    {/* Side-by-side: File Upload | Link Submit */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* ── File Upload Panel ── */}
+                        <div className="border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                <CloudUpload className="w-4 h-4 text-blue-500" />
+                                Upload File
                             </div>
-                        ) : (
-                            <div className="flex flex-col items-center gap-4">
-                                {/* Selected file info */}
-                                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 w-full max-w-md">
-                                    <FileText className="w-5 h-5 text-blue-500 shrink-0" />
-                                    <div className="min-w-0 flex-1 text-left">
-                                        <p className="text-sm font-medium text-slate-800 truncate">
-                                            {selectedFile?.name}
-                                        </p>
-                                        <p className="text-xs text-slate-500">
-                                            {selectedFile ? formatFileSize(selectedFile.size) : ""}
-                                        </p>
-                                    </div>
-                                    {!isUploading && (
+
+                            <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-4 sm:p-6 transition-colors text-center">
+                                {!selectedFile && !isUploading ? (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="p-3 bg-blue-50 rounded-full">
+                                            <CloudUpload className="w-6 h-6 text-blue-500" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs sm:text-sm font-medium text-slate-700">Choose a file</p>
+                                            <p className="text-xs text-slate-400 mt-1">PDF, DOC, PPT, ZIP &middot; Max 32MB</p>
+                                        </div>
                                         <Button
-                                            variant="ghost"
+                                            variant="outline"
                                             size="sm"
-                                            className="h-7 w-7 p-0 text-slate-400 hover:text-red-500"
-                                            onClick={clearSelectedFile}
+                                            className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50 text-xs"
+                                            onClick={() => fileInputRef.current?.click()}
                                         >
-                                            <X className="w-4 h-4" />
+                                            <Upload className="w-3.5 h-3.5" />
+                                            Browse Files
                                         </Button>
-                                    )}
-                                </div>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept={ACCEPTED_TYPES}
+                                            className="hidden"
+                                            onChange={handleFileSelect}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 w-full">
+                                            <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+                                            <div className="min-w-0 flex-1 text-left">
+                                                <p className="text-xs font-medium text-slate-800 truncate">{selectedFile?.name}</p>
+                                                <p className="text-xs text-slate-500">{selectedFile ? formatFileSize(selectedFile.size) : ""}</p>
+                                            </div>
+                                            {!isUploading && (
+                                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-400 hover:text-red-500" onClick={clearSelectedFile}>
+                                                    <X className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
 
-                                {/* Progress bar */}
-                                {isUploading && (
-                                    <div className="w-full max-w-md space-y-2">
-                                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                                                style={{ width: `${uploadProgress}%` }}
-                                            />
-                                        </div>
-                                        <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            Uploading... {uploadProgress}%
-                                        </div>
+                                        {isUploading && (
+                                            <div className="w-full space-y-1.5">
+                                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                                                </div>
+                                                <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    Uploading... {uploadProgress}%
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
-
-                                {/* Upload button */}
-                                {!isUploading && (
-                                    <Button
-                                        className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6"
-                                        onClick={handleUpload}
-                                    >
-                                        <Upload className="w-4 h-4" />
-                                        Upload File
-                                    </Button>
-                                )}
                             </div>
-                        )}
 
-                        {/* Error display */}
-                        {uploadError && (
-                            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-                                <AlertTriangle className="w-4 h-4 shrink-0" />
-                                {uploadError}
+                            <Button
+                                className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm"
+                                onClick={handleUpload}
+                                disabled={!selectedFile || isUploading || submittingLink}
+                            >
+                                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                Upload File
+                            </Button>
+                        </div>
+
+                        {/* ── Link Submission Panel ── */}
+                        <div className="border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                <Link2 className="w-4 h-4 text-emerald-500" />
+                                Submit Link
                             </div>
-                        )}
+
+                            <div className="space-y-3">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-600">Link Type</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(["github", "drive", "figma", "other"] as const).map((t) => (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                onClick={() => setLinkType(t)}
+                                                className={`text-xs py-1.5 px-2 rounded-lg border transition-all capitalize ${
+                                                    linkType === t
+                                                        ? "border-emerald-400 bg-emerald-50 text-emerald-700 font-medium"
+                                                        : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                                }`}
+                                            >
+                                                {t === "drive" ? "Google Drive" : t === "github" ? "GitHub" : t === "figma" ? "Figma" : "Other"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-600">URL</label>
+                                    <input
+                                        type="url"
+                                        value={linkUrl}
+                                        onChange={(e) => { setLinkUrl(e.target.value); setUploadError("") }}
+                                        placeholder="https://github.com/user/repo"
+                                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    />
+                                </div>
+                            </div>
+
+                            <Button
+                                onClick={handleLinkSubmit}
+                                disabled={!linkUrl.trim() || submittingLink || isUploading}
+                                variant="outline"
+                                className="w-full gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs sm:text-sm"
+                            >
+                                {submittingLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                                Submit Link
+                            </Button>
+                        </div>
                     </div>
+
+                    {/* Error display */}
+                    {uploadError && (
+                        <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            {uploadError}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
             {/* ─── Uploaded Files ──────────────────────────────── */}
             <Card className="shadow-sm border-slate-100 mb-8">
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-4">
                         <div>
-                            <h2 className="font-bold text-lg text-slate-900">Uploaded Files</h2>
-                            <p className="text-sm text-slate-500">Manage your uploaded project files</p>
+                            <h2 className="font-bold text-base sm:text-lg text-slate-900">Uploaded Files</h2>
+                            <p className="text-xs sm:text-sm text-slate-500">Manage your uploaded project files</p>
                         </div>
                         {uploadedFiles.length > 0 && (
                             <Badge variant="outline" className="text-xs font-semibold border-slate-300">

@@ -15,7 +15,7 @@ export default function GuideDashboard() {
     const [fileCount, setFileCount] = React.useState(0)
     const [loading, setLoading] = React.useState(true)
 
-    // Filter proposals where this guide is the supervisor
+    // Filter proposals where this guide is assigned
     const myProposals = React.useMemo(
         () => proposals.filter((p) => p.supervisor === user?.name),
         [proposals, user?.name]

@@ -175,7 +175,7 @@ export default function ManageDeadlinesPage() {
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="w-50 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Student</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Project Title</TableHead>
-                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider hidden md:table-cell">Supervisor</TableHead>
+                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider hidden md:table-cell">Guide</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Deadline</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider hidden lg:table-cell">Submitted</TableHead>
                                     <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-24">Actions</TableHead>
@@ -243,7 +243,7 @@ export default function ManageDeadlinesPage() {
                                     {suggestions.map((project) => (
                                         <button key={project._id} type="button" onClick={() => handleSelectProject(project)} className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-slate-100 last:border-0">
                                             <p className="text-sm font-medium text-slate-900 truncate">{project.title}</p>
-                                            <p className="text-xs text-slate-500 mt-0.5">{project.studentName} &middot; {project.supervisor || "No supervisor"}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">{project.studentName} &middot; {project.supervisor || "No guide"}</p>
                                         </button>
                                     ))}
                                 </div>
@@ -276,7 +276,7 @@ export default function ManageDeadlinesPage() {
                                             </Badge>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Supervisor</p>
+                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Guide</p>
                                             <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-slate-400" />{selectedProject.supervisor || "Not Assigned"}</p>
                                         </div>
                                     </div>

@@ -28,6 +28,8 @@ export interface IMilestone {
     status: "pending" | "submitted" | "reviewed"
     fileUrl: string | null
     fileName: string | null
+    submissionLink: string | null
+    linkType: "github" | "drive" | "figma" | "other" | null
     submittedAt: Date | null
     createdAt: Date
 }
@@ -44,6 +46,8 @@ const MilestoneSchema = new Schema<IMilestone>(
         },
         fileUrl: { type: String, default: null },
         fileName: { type: String, default: null },
+        submissionLink: { type: String, default: null },
+        linkType: { type: String, enum: ["github", "drive", "figma", "other", null], default: null },
         submittedAt: { type: Date, default: null },
     },
     { timestamps: { createdAt: true, updatedAt: false } }

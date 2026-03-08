@@ -234,11 +234,11 @@ export default function AdminProjectsPage() {
                             </Select>
                         </div>
                         <div className="w-full sm:w-48 space-y-1.5">
-                            <Label htmlFor="filter-supervisor" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Supervisor</Label>
+                            <Label htmlFor="filter-supervisor" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Guide</Label>
                             <Select value={filterSupervisor} onValueChange={setFilterSupervisor}>
-                                <SelectTrigger id="filter-supervisor" className="bg-white"><SelectValue placeholder="All Supervisors" /></SelectTrigger>
+                                <SelectTrigger id="filter-supervisor" className="bg-white"><SelectValue placeholder="All Guides" /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Supervisors</SelectItem>
+                                    <SelectItem value="all">All Guides</SelectItem>
                                     {supervisorNames.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
                                 </SelectContent>
                             </Select>
@@ -258,7 +258,7 @@ export default function AdminProjectsPage() {
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="min-w-55 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Project Details</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Student</TableHead>
-                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider hidden md:table-cell">Supervisor</TableHead>
+                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider hidden md:table-cell">Guide</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider hidden lg:table-cell">Deadline</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Status</TableHead>
                                     <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider min-w-40">Actions</TableHead>
@@ -361,7 +361,7 @@ export default function AdminProjectsPage() {
                                 </div>
                             )}
 
-                            {/* Student & Supervisor row */}
+                            {/* Student & Guide row */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
                                     <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Student</Label>
@@ -371,7 +371,7 @@ export default function AdminProjectsPage() {
                                     </div>
                                 </div>
                                 <div className="grid gap-1.5">
-                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Supervisor</Label>
+                                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Guide</Label>
                                     <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-4 py-2.5">
                                         <p className="text-sm text-slate-800">{selectedProject.supervisor ?? "Not Assigned"}</p>
                                     </div>
@@ -499,7 +499,7 @@ export default function AdminProjectsPage() {
                                 </Label>
                                 <textarea
                                     rows={3}
-                                    placeholder={actionType === "approved" ? "e.g., Proposal looks good. Assigned to supervisor." : "e.g., Please revise the scope and resubmit."}
+                                    placeholder={actionType === "approved" ? "e.g., Proposal looks good. Assigned to guide." : "e.g., Please revise the scope and resubmit."}
                                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                                     value={actionRemark}
                                     onChange={(e) => setActionRemark(e.target.value)}

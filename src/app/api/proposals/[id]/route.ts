@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { patchProposalStudentSchema, patchProposalAdminSchema, parseBody } from "@/lib/zod-schemas"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -52,12 +53,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 return NextResponse.json({ error: "Only pending proposals can be edited" }, { status: 403 })
             }
             // Students may only change title and description
+            const studentParsed = parseBody(patchProposalStudentSchema, body)
+            if (!studentParsed.success) return NextResponse.json({ error: studentParsed.error }, { status: 400 })
+            const studentBody = studentParsed.data
             const studentAllowed: Record<string, unknown> = {}
-            if (body.title !== undefined) studentAllowed.title = body.title
-            if (body.description !== undefined) studentAllowed.description = body.description
-            if (Object.keys(studentAllowed).length === 0) {
-                return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
-            }
+            if (studentBody.title !== undefined) studentAllowed.title = studentBody.title
+            if (studentBody.description !== undefined) studentAllowed.description = studentBody.description
             const updated = await Proposal.findByIdAndUpdate(id, { $set: studentAllowed }, { new: true, runValidators: true }).lean()
             return NextResponse.json(updated)
         }
@@ -67,24 +68,28 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
+        const adminParsed = parseBody(patchProposalAdminSchema, body)
+        if (!adminParsed.success) return NextResponse.json({ error: adminParsed.error }, { status: 400 })
+        const adminBody = adminParsed.data
+
         // Build update object — only allow safe fields
         const allowed: Record<string, unknown> = {}
         const safeFields = ["status", "supervisor", "guideId", "deadline", "title", "description"] as const
         for (const key of safeFields) {
-            if (body[key] !== undefined) {
-                allowed[key] = body[key]
+            if (adminBody[key] !== undefined) {
+                allowed[key] = adminBody[key]
             }
         }
 
         // If a remark is included alongside the status change, push it atomically
         const update: Record<string, unknown> = { $set: allowed }
-        if (body.remark) {
+        if (adminBody.remark) {
             update.$push = {
                 remarks: {
-                    from: body.remark.from,
-                    fromRole: body.remark.fromRole,
-                    message: body.remark.message,
-                    action: body.remark.action ?? "feedback",
+                    from: adminBody.remark.from,
+                    fromRole: adminBody.remark.fromRole,
+                    message: adminBody.remark.message,
+                    action: adminBody.remark.action ?? "feedback",
                     createdAt: new Date(),
                 },
             }
@@ -100,18 +105,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         }
 
         // Auto-create notification for the student when status changes
-        if (body.status && proposal.studentEmail) {
+        if (adminBody.status && proposal.studentEmail) {
             const statusLabels: Record<string, string> = {
                 approved: "Approved",
                 rejected: "Rejected",
                 completed: "Completed",
             }
-            const statusLabel = statusLabels[body.status]
+            const statusLabel = statusLabels[adminBody.status!]
             if (statusLabel) {
-                const notifType = body.status === "completed" ? "system" : "proposal"
+                const notifType = adminBody.status === "completed" ? "system" : "proposal"
                 const notifTitle = `Proposal ${statusLabel}`
                 const notifMessage =
-                    body.remark?.message ||
+                    adminBody.remark?.message ||
                     `Your proposal "${proposal.title}" has been ${statusLabel.toLowerCase()}.`
                 try {
                     await Notification.create({

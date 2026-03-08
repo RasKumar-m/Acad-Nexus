@@ -260,7 +260,7 @@ export default function ManageStudentsPage() {
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Student Info</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Department</TableHead>
-                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Supervisor</TableHead>
+                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Guide</TableHead>
                                     <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Project Title</TableHead>
                                     <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-36">Actions</TableHead>
                                 </TableRow>

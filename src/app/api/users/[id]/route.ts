@@ -9,6 +9,7 @@ import {
     validatePassword,
 } from "@/lib/validation"
 import { requireRole } from "@/lib/auth-guard"
+import { patchUserSchema, parseBody } from "@/lib/zod-schemas"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -22,7 +23,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     try {
         await dbConnect()
         const { id } = await context.params
-        const body = (await req.json()) as Record<string, unknown>
+        const raw = (await req.json()) as Record<string, unknown>
+        const zodParsed = parseBody(patchUserSchema, raw)
+        if (!zodParsed.success) return NextResponse.json({ error: zodParsed.error }, { status: 400 })
+        const body = zodParsed.data
 
         const allowed: Record<string, unknown> = {}
         const safeFields = ["name", "email", "department", "expertise", "maxStudents", "role", "assignedGuideId", "assignedGuideName"] as const

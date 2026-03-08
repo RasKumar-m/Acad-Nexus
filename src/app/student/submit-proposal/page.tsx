@@ -64,7 +64,7 @@ function remarkActionBadge(action?: string) {
 // ─── Page ───────────────────────────────────────────────────────────
 export default function SubmitProposalPage() {
     const { user } = useAuth()
-    const { addProposal, editProposal, deleteProposal, getProposalsByStudent } = useProposals()
+    const { addProposal, editProposal, deleteProposal, getProposalsByStudent, loading: proposalsLoading } = useProposals()
 
     const [title, setTitle] = React.useState("")
     const [description, setDescription] = React.useState("")
@@ -166,6 +166,14 @@ export default function SubmitProposalPage() {
         } finally {
             setDeleteDeleting(false)
         }
+    }
+
+    if (proposalsLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-96">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+        )
     }
 
     return (
@@ -425,7 +433,7 @@ export default function SubmitProposalPage() {
                             )}
                             {proposal.supervisor && (
                                 <div className="space-y-1.5">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Supervisor</p>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Guide</p>
                                     <p className="text-sm font-medium text-slate-800">{proposal.supervisor}</p>
                                 </div>
                             )}

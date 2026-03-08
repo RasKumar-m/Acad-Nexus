@@ -42,7 +42,7 @@ export default function AssignedStudentsPage() {
     const [completing, setCompleting] = React.useState(false)
     const [completeChecked, setCompleteChecked] = React.useState(false)
 
-    // Filter proposals where this guide is the supervisor
+    // Filter proposals where this guide is assigned
     const myStudents = React.useMemo(
         () => proposals.filter((p) => p.supervisor === user?.name),
         [proposals, user?.name]

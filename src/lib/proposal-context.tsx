@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSession } from "next-auth/react"
 
 // ─── Types ──────────────────────────────────────────────────────────
 export type ProposalStatus = "pending" | "approved" | "rejected" | "completed"
@@ -113,6 +114,7 @@ export function useProposals() {
 export function ProposalProvider({ children }: { children: React.ReactNode }) {
     const [proposals, setProposals] = React.useState<Proposal[]>([])
     const [loading, setLoading] = React.useState(true)
+    const { status } = useSession()
 
     // ── Fetch all proposals ─────────────────────────────────────────
     const refreshProposals = React.useCallback(async () => {
@@ -128,10 +130,15 @@ export function ProposalProvider({ children }: { children: React.ReactNode }) {
         }
     }, [])
 
-    // Load once on mount
+    // Only fetch when session is authenticated
     React.useEffect(() => {
-        refreshProposals()
-    }, [refreshProposals])
+        if (status === "authenticated") {
+            refreshProposals()
+        } else if (status === "unauthenticated") {
+            setProposals([])
+            setLoading(false)
+        }
+    }, [status, refreshProposals])
 
     // ── Create ──────────────────────────────────────────────────────
     const addProposal = React.useCallback(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
 import { requireRole } from "@/lib/auth-guard"
+import { createRemarkSchema, parseBody } from "@/lib/zod-schemas"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -15,25 +16,20 @@ export async function POST(req: NextRequest, context: RouteContext) {
     try {
         await dbConnect()
         const { id } = await context.params
-        const body = await req.json()
-        const { from, fromRole, message, action } = body
-
-        if (!from || !fromRole || !message) {
-            return NextResponse.json(
-                { error: "from, fromRole, and message are required" },
-                { status: 400 }
-            )
-        }
+        const raw = await req.json()
+        const parsed = parseBody(createRemarkSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         const proposal = await Proposal.findByIdAndUpdate(
             id,
             {
                 $push: {
                     remarks: {
-                        from,
-                        fromRole,
-                        message,
-                        action: action ?? "feedback",
+                        from: body.from,
+                        fromRole: body.fromRole,
+                        message: body.message,
+                        action: body.action,
                         createdAt: new Date(),
                     },
                 },

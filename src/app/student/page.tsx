@@ -57,7 +57,7 @@ interface MilestoneItem {
 
 export default function StudentDashboard() {
     const { user } = useAuth()
-    const { getProposalsByStudent } = useProposals()
+    const { getProposalsByStudent, loading: proposalsLoading } = useProposals()
 
     const studentEmail = user?.email ?? ""
     const myProposals = getProposalsByStudent(studentEmail)
@@ -181,6 +181,14 @@ export default function StudentDashboard() {
             .catch(() => {})
     }, [studentEmail])
 
+    if (proposalsLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-96">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
     return (
         <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
 
@@ -279,7 +287,7 @@ export default function StudentDashboard() {
                                     <p className="text-slate-600 text-sm line-clamp-3">{projectDesc}</p>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <p className="text-sm font-medium text-muted-foreground">Supervisor</p>
+                                    <p className="text-sm font-medium text-muted-foreground">Guide</p>
                                     <p className="text-slate-800 font-medium">{guideName}</p>
                                 </div>
                                 <div className="space-y-1.5">

@@ -271,7 +271,7 @@ export default function AssignGuidePage() {
         <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Assign Supervisor</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Assign Guide</h1>
                     <p className="text-sm text-slate-500 mt-1">Assign or reassign guides for every student from one place.</p>
                 </div>
             </div>
@@ -342,8 +342,8 @@ export default function AssignGuidePage() {
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Student</TableHead>
                                     <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Project Title</TableHead>
-                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Current Supervisor</TableHead>
-                                    <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Assign Supervisor</TableHead>
+                                    <TableHead className="text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Current Guide</TableHead>
+                                    <TableHead className="min-w-56 text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider">Assign Guide</TableHead>
                                     <TableHead className="text-right text-xs font-semibold text-slate-500 h-10 uppercase tracking-wider w-32">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -378,7 +378,7 @@ export default function AssignGuidePage() {
                                                 </TableCell>
                                                 <TableCell className="py-4">
                                                     <Select value={currentSelection} onValueChange={(v) => handleSelectGuide(student._id, v)}>
-                                                        <SelectTrigger className="w-full h-8 text-xs bg-white"><SelectValue placeholder="Select Supervisor" /></SelectTrigger>
+                                                        <SelectTrigger className="w-full h-8 text-xs bg-white"><SelectValue placeholder="Select Guide" /></SelectTrigger>
                                                         <SelectContent>
                                                             {guides.map((guide) => {
                                                                 const count = guideLoadMap[guide._id] ?? 0

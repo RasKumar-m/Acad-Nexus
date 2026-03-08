@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
+import Notification from "@/models/Notification"
+import User from "@/models/User"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { patchMilestoneSchema, parseBody } from "@/lib/zod-schemas"
 
 interface RouteContext {
     params: Promise<{ id: string; milestoneId: string }>
@@ -15,6 +18,8 @@ interface MilestoneDocLike {
     status?: unknown
     fileUrl?: unknown
     fileName?: unknown
+    submissionLink?: unknown
+    linkType?: unknown
     submittedAt?: unknown
     createdAt?: unknown
 }
@@ -32,6 +37,8 @@ function serialiseMilestones(milestones: unknown): Array<Record<string, unknown>
             status: String(m.status ?? "pending"),
             fileUrl: m.fileUrl ? String(m.fileUrl) : null,
             fileName: m.fileName ? String(m.fileName) : null,
+            submissionLink: m.submissionLink ? String(m.submissionLink) : null,
+            linkType: m.linkType ? String(m.linkType) : null,
             submittedAt: m.submittedAt ? new Date(String(m.submittedAt)).toISOString() : null,
             createdAt: m.createdAt ? new Date(String(m.createdAt)).toISOString() : null,
         }
@@ -46,7 +53,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     try {
         await dbConnect()
         const { id, milestoneId } = await context.params
-        const body = await req.json()
+        const raw = await req.json()
+        const parsed = parseBody(patchMilestoneSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         const update: Record<string, unknown> = {}
 
@@ -54,19 +64,33 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         if (body.fileUrl && body.fileName) {
             update["milestones.$.fileUrl"] = body.fileUrl
             update["milestones.$.fileName"] = body.fileName
+            update["milestones.$.submissionLink"] = null
+            update["milestones.$.linkType"] = null
+            update["milestones.$.status"] = "submitted"
+            update["milestones.$.submittedAt"] = new Date()
+        }
+
+        // Student submitting a link
+        if (body.submissionLink && body.linkType) {
+            update["milestones.$.submissionLink"] = body.submissionLink
+            update["milestones.$.linkType"] = body.linkType
+            update["milestones.$.fileUrl"] = null
+            update["milestones.$.fileName"] = null
             update["milestones.$.status"] = "submitted"
             update["milestones.$.submittedAt"] = new Date()
         }
 
         // Guide updating milestone status (e.g. reviewed, pending, submitted)
-        const validStatuses = ["pending", "submitted", "reviewed"]
-        if (body.status && validStatuses.includes(body.status)) {
+        if (body.status) {
             update["milestones.$.status"] = body.status
         }
 
         if (Object.keys(update).length === 0) {
             return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
         }
+
+        const isStudentSubmission = !!(body.fileUrl || body.submissionLink)
+        const isGuideReview = !!(body.status === "reviewed")
 
         const proposal = await Proposal.findOneAndUpdate(
             { _id: id, "milestones._id": milestoneId },
@@ -76,6 +100,42 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
         if (!proposal) {
             return NextResponse.json({ error: "Proposal or milestone not found" }, { status: 404 })
+        }
+
+        // Find the updated milestone title for notification message
+        const updatedMilestone = (proposal.milestones as Array<{ _id?: unknown; title?: string }>)
+            ?.find((m) => String(m._id) === milestoneId)
+        const milestoneTitle = updatedMilestone?.title ?? "Milestone"
+
+        // Notify guide when student submits a milestone
+        if (isStudentSubmission && proposal.guideId) {
+            try {
+                const guide = await User.findById(proposal.guideId).select("email").lean()
+                if (guide) {
+                    await Notification.create({
+                        userId: proposal.guideId,
+                        userEmail: (guide as { email?: string }).email,
+                        type: "assignment",
+                        title: "Milestone Submitted",
+                        message: `${proposal.studentName} has submitted "${milestoneTitle}" for project "${proposal.title}".`,
+                        relatedId: String(proposal._id),
+                    })
+                }
+            } catch (_) { /* non-critical */ }
+        }
+
+        // Notify student when guide marks milestone as reviewed
+        if (isGuideReview) {
+            try {
+                await Notification.create({
+                    userId: proposal.studentId,
+                    userEmail: proposal.studentEmail,
+                    type: "feedback",
+                    title: "Milestone Reviewed",
+                    message: `Your milestone "${milestoneTitle}" for project "${proposal.title}" has been reviewed by your guide.`,
+                    relatedId: String(proposal._id),
+                })
+            } catch (_) { /* non-critical */ }
         }
 
         return NextResponse.json(serialiseMilestones(proposal.milestones))

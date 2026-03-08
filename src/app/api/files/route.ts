@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import UploadedFile from "@/models/UploadedFile"
+import Proposal from "@/models/Proposal"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { createFileSchema, parseBody } from "@/lib/zod-schemas"
 
 // GET  /api/files?email=...  — list files (all, or filtered by student email)
 export async function GET(req: NextRequest) {
@@ -27,26 +29,24 @@ export async function POST(req: NextRequest) {
 
     try {
         await dbConnect()
-        const body = await req.json()
-        const { fileName, fileUrl, category, fileSize, studentId, studentName, studentEmail } = body
+        const raw = await req.json()
+        const parsed = parseBody(createFileSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         // Students can only upload for themselves
-        if (studentId !== session.user.id) {
+        if (body.studentId !== session.user.id) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
-        if (!fileName || !fileUrl || !category || !studentId || !studentName || !studentEmail) {
-            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-        }
-
         const file = await UploadedFile.create({
-            fileName,
-            fileUrl,
-            category,
-            fileSize: fileSize || "0 B",
-            studentId,
-            studentName,
-            studentEmail,
+            fileName: body.fileName,
+            fileUrl: body.fileUrl,
+            category: body.category,
+            fileSize: body.fileSize,
+            studentId: body.studentId,
+            studentName: body.studentName,
+            studentEmail: body.studentEmail,
         })
 
         return NextResponse.json(file, { status: 201 })

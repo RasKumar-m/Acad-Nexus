@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { updateNotificationSchema, parseBody } from "@/lib/zod-schemas"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -41,19 +42,17 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     try {
         await dbConnect()
         const { id } = await context.params
-        const body = await req.json()
-        const { title, message, targetAudience } = body
-
-        if (!title || !message) {
-            return NextResponse.json({ error: "title and message are required" }, { status: 400 })
-        }
+        const raw = await req.json()
+        const parsed = parseBody(updateNotificationSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         const update: Record<string, unknown> = {
-            title: String(title).trim(),
-            message: String(message).trim(),
+            title: body.title,
+            message: body.message,
         }
-        if (targetAudience && ["all", "student", "guide", "admin"].includes(targetAudience)) {
-            update.targetAudience = targetAudience
+        if (body.targetAudience) {
+            update.targetAudience = body.targetAudience
         }
 
         const notification = await Notification.findByIdAndUpdate(

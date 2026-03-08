@@ -8,17 +8,25 @@ import {
     validateName,
     validatePassword,
 } from "@/lib/validation"
-import { requireRole } from "@/lib/auth-guard"
+import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { createUserSchema, parseBody } from "@/lib/zod-schemas"
 
-// GET /api/users?role=student|guide|admin  — list users (admin only)
+// GET /api/users?role=student|guide|admin
+// Any authenticated user can list guides; admin required for other roles
 export async function GET(req: NextRequest) {
-    const { res } = await requireRole("admin")
-    if (res) return res
+    const role = req.nextUrl.searchParams.get("role")
+
+    if (role === "guide") {
+        const { res } = await requireAuth()
+        if (res) return res
+    } else {
+        const { res } = await requireRole("admin")
+        if (res) return res
+    }
 
     try {
         await dbConnect()
 
-        const role = req.nextUrl.searchParams.get("role")
         const filter = role ? { role } : {}
         const users = await User.find(filter)
             .select("-password")
@@ -40,8 +48,12 @@ export async function POST(req: NextRequest) {
     try {
         await dbConnect()
 
-        const body = (await req.json()) as Record<string, unknown>
-        const normalized = normalizeUserInput(body)
+        const raw = (await req.json()) as Record<string, unknown>
+        const zodParsed = parseBody(createUserSchema, raw)
+        if (!zodParsed.success) return NextResponse.json({ error: zodParsed.error }, { status: 400 })
+        const zodBody = zodParsed.data
+
+        const normalized = normalizeUserInput(zodBody as unknown as Record<string, unknown>)
         const { name, email, password, role, department, expertise, maxStudents } = normalized
 
         if (!name || !email || !password || !role) {

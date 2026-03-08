@@ -11,6 +11,7 @@ import {
     Star,
     Inbox,
     FileText,
+    Loader2,
 } from "lucide-react"
 import { useProposals } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
@@ -32,7 +33,7 @@ interface FeedbackItem {
 // ─── Page ───────────────────────────────────────────────────────────
 export default function FeedbackPage() {
     const { user } = useAuth()
-    const { getProposalsByStudent } = useProposals()
+    const { getProposalsByStudent, loading } = useProposals()
 
     const studentEmail = user?.email ?? ""
     const myProposals = getProposalsByStudent(studentEmail)
@@ -42,7 +43,7 @@ export default function FeedbackPage() {
         p.remarks.map((r) => ({
             id: r._id ?? "",
             from: r.from,
-            fromRole: r.fromRole === "Admin" ? "Administrator" : "Supervisor",
+            fromRole: r.fromRole === "Admin" ? "Administrator" : "Guide",
             initials: r.from.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
             avatarColor: r.fromRole === "Admin" ? "bg-slate-500" : "bg-blue-600",
             subject: `${r.action === "approved" ? "Proposal Approved" : r.action === "rejected" ? "Proposal Rejected" : "Feedback"} — ${p.title}`,
@@ -59,6 +60,14 @@ export default function FeedbackPage() {
     const selectedFeedback = feedbacks.find((f) => f.id === selectedId) ?? null
     const unreadCount = feedbacks.filter((f) => !f.isRead).length
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-96">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
     return (
         <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto">
             {/* ─── Header ─────────────────────────────────────── */}
@@ -66,7 +75,7 @@ export default function FeedbackPage() {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Feedback</h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        View remarks and feedback from your supervisor and administration on your proposals
+                        View remarks and feedback from your guide and administration on your proposals
                     </p>
                 </div>
                 {feedbacks.length > 0 && (
@@ -82,7 +91,7 @@ export default function FeedbackPage() {
                     <CardContent className="p-16 flex flex-col items-center gap-3 text-slate-400">
                         <Inbox className="w-12 h-12 text-slate-300" />
                         <p className="font-semibold text-lg text-slate-500">No feedback yet</p>
-                        <p className="text-sm">Submit your proposal to start receiving feedback from admin and supervisor.</p>
+                        <p className="text-sm">Submit your proposal to start receiving feedback from admin and guide.</p>
                     </CardContent>
                 </Card>
             ) : (

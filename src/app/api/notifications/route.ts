@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { createNotificationSchema, markAllReadSchema, parseBody } from "@/lib/zod-schemas"
 
 // GET /api/notifications?email=...&unread=true&audience=...&role=...  — list notifications
 export async function GET(req: NextRequest) {
@@ -61,20 +62,15 @@ export async function POST(req: NextRequest) {
     try {
         await dbConnect()
 
-        const body = await req.json()
-        const { userId, userEmail, type, title, message, relatedId, targetAudience, postedBy } = body
-
-        if (!title || !message) {
-            return NextResponse.json(
-                { error: "title and message are required" },
-                { status: 400 }
-            )
-        }
+        const raw = await req.json()
+        const parsed = parseBody(createNotificationSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         // For circulars, userId/userEmail are not needed
-        const isCircular = type === "circular" || (targetAudience && targetAudience !== "individual")
+        const isCircular = body.type === "circular" || (body.targetAudience && body.targetAudience !== "individual")
 
-        if (!isCircular && (!userId || !userEmail)) {
+        if (!isCircular && (!body.userId || !body.userEmail)) {
             return NextResponse.json(
                 { error: "userId and userEmail are required for personal notifications" },
                 { status: 400 }
@@ -82,14 +78,14 @@ export async function POST(req: NextRequest) {
         }
 
         const notification = await Notification.create({
-            ...(userId && { userId }),
-            ...(userEmail && { userEmail: userEmail.toLowerCase().trim() }),
-            type: type || (isCircular ? "circular" : "system"),
-            targetAudience: targetAudience || "individual",
-            title,
-            message,
-            relatedId: relatedId || "",
-            ...(postedBy && { postedBy }),
+            ...(body.userId && { userId: body.userId }),
+            ...(body.userEmail && { userEmail: body.userEmail }),
+            type: body.type,
+            targetAudience: body.targetAudience,
+            title: body.title,
+            message: body.message,
+            relatedId: body.relatedId || "",
+            ...(body.postedBy && { postedBy: body.postedBy }),
         })
 
         return NextResponse.json(notification, { status: 201 })
@@ -107,15 +103,13 @@ export async function PATCH(req: NextRequest) {
     try {
         await dbConnect()
 
-        const body = await req.json()
-        const { email } = body
-
-        if (!email) {
-            return NextResponse.json({ error: "email is required" }, { status: 400 })
-        }
+        const raw = await req.json()
+        const parsed = parseBody(markAllReadSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         await Notification.updateMany(
-            { userEmail: email.toLowerCase().trim(), isRead: false },
+            { userEmail: body.email, isRead: false },
             { $set: { isRead: true } }
         )
 

@@ -8,6 +8,7 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -53,6 +54,7 @@ interface UserDoc {
     email: string
     role: string
     department?: string
+    assignedGuideName?: string | null
 }
 
 interface FileDoc {
@@ -124,6 +126,9 @@ export default function AdminDashboard() {
     const [deleteTitle, setDeleteTitle] = React.useState("")
     const [deleting, setDeleting] = React.useState(false)
 
+    // Export
+    const [exporting, setExporting] = React.useState(false)
+
     React.useEffect(() => {
         async function fetchAll() {
             try {
@@ -159,12 +164,12 @@ export default function AdminDashboard() {
         return new Date(p.deadline) < new Date()
     }).length
 
-    const supervisorMap: Record<string, number> = {}
-    for (const p of proposals) {
-        const sup = p.supervisor || "Unassigned"
-        supervisorMap[sup] = (supervisorMap[sup] || 0) + 1
+    const guideStudentMap: Record<string, number> = {}
+    for (const s of students) {
+        const guide = s.assignedGuideName || "Unassigned"
+        guideStudentMap[guide] = (guideStudentMap[guide] || 0) + 1
     }
-    const chartData = Object.entries(supervisorMap).map(([name, total]) => ({ name, total }))
+    const chartData = Object.entries(guideStudentMap).map(([name, count]) => ({ name, students: count }))
 
     const recentActivity = [...proposals]
         .sort((a, b) => new Date(b.createdAt ?? "").getTime() - new Date(a.createdAt ?? "").getTime())
@@ -174,6 +179,28 @@ export default function AdminDashboard() {
         const q = fileSearch.toLowerCase()
         return f.fileName.toLowerCase().includes(q) || f.studentName.toLowerCase().includes(q)
     })
+
+    async function handleExport() {
+        setExporting(true)
+        try {
+            const res = await fetch("/api/export")
+            if (!res.ok) throw new Error("Export failed")
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            const today = new Date().toISOString().slice(0, 10)
+            a.download = `AcadNexus_Export_${today}.xlsx`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+        } catch (err) {
+            console.error("Export failed:", err)
+        } finally {
+            setExporting(false)
+        }
+    }
 
     async function handleAddStudent() {
         if (!sName.trim() || !sEmail.trim() || !sPass.trim()) {
@@ -440,17 +467,17 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                 <Card className="shadow-sm border-slate-100 lg:col-span-2 bg-white">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-base font-semibold text-slate-800">Project Distribution by Supervisor</CardTitle>
+                        <CardTitle className="text-base font-semibold text-slate-800">Assigned Students to Guides</CardTitle>
                     </CardHeader>
-                    <CardContent className="pl-2">
-                        <div className="h-70 w-full">
+                    <CardContent className="pl-2 pb-2">
+                        <div className="h-[200px] w-full">
                             {chartData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} dy={10} />
-                                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                                    <BarChart data={chartData} margin={{ top: 8, right: 20, left: -10, bottom: 0 }}>
+                                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} dy={4} />
+                                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, 'auto']} />
                                         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(0 0 0 / 0.08)', fontSize: '13px' }} />
-                                        <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={80} />
+                                        <Bar dataKey="students" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={80} />
                                         <defs>
                                             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                                                 <stop offset="0%" stopColor="#6366f1" />
@@ -460,41 +487,43 @@ export default function AdminDashboard() {
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div className="flex items-center justify-center h-full text-sm text-slate-400">No projects yet</div>
+                                <div className="flex items-center justify-center h-full text-sm text-slate-400">No students assigned yet</div>
                             )}
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-slate-100 bg-white">
+                <Card className="shadow-sm border-slate-100 bg-white flex flex-col">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold text-slate-800">Recent Activity</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="space-y-5">
-                            {recentActivity.length === 0 ? (
-                                <p className="text-sm text-slate-400 text-center py-6">No recent activity</p>
-                            ) : (
-                                recentActivity.map((p, idx) => (
-                                    <div key={p._id} className="flex gap-4 relative">
-                                        <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 relative z-10 ${p.status === "approved" ? "bg-emerald-400" : p.status === "rejected" ? "bg-rose-400" : "bg-amber-400"}`} />
-                                        {idx < recentActivity.length - 1 && <div className="absolute left-1 top-3 -bottom-6 w-px bg-slate-100" />}
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-medium text-slate-700 leading-snug">
-                                                <span className="font-semibold text-slate-900">{p.studentName}</span>{" "}
-                                                {p.status === "pending" ? "submitted a new proposal" : p.status === "approved" ? "proposal was approved" : "proposal was rejected"}: <span className="text-slate-600">{p.title}</span>
-                                            </p>
-                                            <div className="flex gap-2">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.status === "approved" ? "bg-emerald-100 text-emerald-700" : p.status === "rejected" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
-                                                    {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                                                </span>
-                                                <span className="text-xs text-slate-400">{p.submittedDate}</span>
+                    <CardContent className="flex-1 min-h-0 pb-3">
+                        <ScrollArea className="h-[200px] pr-3">
+                            <div className="space-y-5">
+                                {recentActivity.length === 0 ? (
+                                    <p className="text-sm text-slate-400 text-center py-6">No recent activity</p>
+                                ) : (
+                                    recentActivity.map((p, idx) => (
+                                        <div key={p._id} className="flex gap-4 relative">
+                                            <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 relative z-10 ${p.status === "approved" ? "bg-emerald-400" : p.status === "rejected" ? "bg-rose-400" : "bg-amber-400"}`} />
+                                            {idx < recentActivity.length - 1 && <div className="absolute left-1 top-3 -bottom-6 w-px bg-slate-100" />}
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-medium text-slate-700 leading-snug">
+                                                    <span className="font-semibold text-slate-900">{p.studentName}</span>{" "}
+                                                    {p.status === "pending" ? "submitted a new proposal" : p.status === "approved" ? "proposal was approved" : "proposal was rejected"}: <span className="text-slate-600">{p.title}</span>
+                                                </p>
+                                                <div className="flex gap-2">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.status === "approved" ? "bg-emerald-100 text-emerald-700" : p.status === "rejected" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
+                                                        {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                                                    </span>
+                                                    <span className="text-xs text-slate-400">{p.submittedDate}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </ScrollArea>
                     </CardContent>
                 </Card>
             </div>
@@ -504,7 +533,7 @@ export default function AdminDashboard() {
                     <CardTitle className="text-base font-semibold text-slate-800">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <Button onClick={() => setAddStudentOpen(true)} className="w-full h-11 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-semibold gap-2 shadow-sm text-sm rounded-xl" size="lg">
                             <Plus className="w-4 h-4" /> Add Student
                         </Button>
@@ -516,6 +545,9 @@ export default function AdminDashboard() {
                         </Button>
                         <Button onClick={() => { setReportsOpen(true); setFileSearch("") }} variant="outline" className="w-full h-11 font-semibold gap-2 text-indigo-600 hover:text-indigo-700 text-sm shadow-sm border-indigo-200 hover:bg-indigo-50 rounded-xl" size="lg">
                             <FileText className="w-4 h-4" /> View Reports
+                        </Button>
+                        <Button onClick={handleExport} disabled={exporting} className="w-full h-11 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 font-semibold gap-2 shadow-sm text-sm rounded-xl text-white" size="lg">
+                            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export Data
                         </Button>
                     </div>
                 </CardContent>

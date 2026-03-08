@@ -54,6 +54,7 @@ const teacherNav: NavItem[] = [
     { title: "Assigned Students", url: "/guide/assigned-students", icon: Users },
     { title: "Milestones", url: "/guide/milestones", icon: Milestone },
     { title: "Student Files", url: "/guide/student-files", icon: FolderOpen },
+    { title: "Notifications", url: "/guide/notifications", icon: Bell },
     { title: "Announcements", url: "/guide/announcements", icon: Megaphone },
 ]
 
@@ -62,7 +63,7 @@ const studentNav: NavItem[] = [
     { title: "Milestones", url: "/student/milestones", icon: Milestone },
     { title: "Submit Proposal", url: "/student/submit-proposal", icon: FileText },
     { title: "Upload Files", url: "/student/upload-files", icon: Upload },
-    { title: "Supervisor", url: "/student/supervisor", icon: UserCheck },
+    { title: "Guide", url: "/student/supervisor", icon: UserCheck },
     { title: "Feedback", url: "/student/feedback", icon: MessageSquare },
     { title: "Notifications", url: "/student/notifications", icon: Bell },
 ]

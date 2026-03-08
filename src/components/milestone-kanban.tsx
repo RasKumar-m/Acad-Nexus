@@ -31,6 +31,7 @@ import {
     GripVertical,
     CalendarDays,
     User,
+    Link2,
 } from "lucide-react"
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -44,6 +45,8 @@ interface MilestoneItem {
     status: MilestoneStatus
     fileUrl: string | null
     fileName: string | null
+    submissionLink: string | null
+    linkType: string | null
     submittedAt: string | null
     createdAt: string
 }
@@ -254,6 +257,19 @@ function MilestoneCard({
                     >
                         <Download className="w-3 h-3" />
                         Download
+                    </a>
+                </div>
+            )}
+            {milestone.submissionLink && (
+                <div className="mt-2 flex items-center gap-2 text-xs">
+                    <a
+                        href={milestone.submissionLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                    >
+                        <Link2 className="w-3 h-3" />
+                        {milestone.linkType === "github" ? "GitHub" : milestone.linkType === "drive" ? "Drive" : milestone.linkType === "figma" ? "Figma" : "Link"}
                     </a>
                 </div>
             )}

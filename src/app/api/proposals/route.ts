@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
+import { createProposalSchema, parseBody } from "@/lib/zod-schemas"
 
 // GET /api/proposals  — list proposals (optional ?email= filter)
 export async function GET(req: NextRequest) {
@@ -30,37 +31,24 @@ export async function POST(req: NextRequest) {
     try {
         await dbConnect()
 
-        const body = await req.json()
-        const {
-            title,
-            description,
-            studentId,
-            studentName,
-            studentEmail,
-            attachedFileUrl,
-            attachedFileType,
-        } = body
+        const raw = await req.json()
+        const parsed = parseBody(createProposalSchema, raw)
+        if (!parsed.success) return NextResponse.json({ error: parsed.error }, { status: 400 })
+        const body = parsed.data
 
         // Students can only create proposals for themselves
-        if (studentId !== session.user.id) {
+        if (body.studentId !== session.user.id) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
-        if (!title || !description || !studentId || !studentName || !studentEmail) {
-            return NextResponse.json(
-                { error: "title, description, studentId, studentName, and studentEmail are required" },
-                { status: 400 }
-            )
-        }
-
         const proposal = await Proposal.create({
-            title,
-            description,
-            studentId,
-            studentName,
-            studentEmail: studentEmail.toLowerCase().trim(),
-            attachedFileUrl: attachedFileUrl || null,
-            attachedFileType: attachedFileType || null,
+            title: body.title,
+            description: body.description,
+            studentId: body.studentId,
+            studentName: body.studentName,
+            studentEmail: body.studentEmail,
+            attachedFileUrl: body.attachedFileUrl || null,
+            attachedFileType: body.attachedFileType || null,
         })
 
         return NextResponse.json(proposal, { status: 201 })

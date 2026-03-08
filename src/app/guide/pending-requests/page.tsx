@@ -75,9 +75,9 @@ export default function PendingRequestsPage() {
     const [confirmRemark, setConfirmRemark] = React.useState("")
     const [confirmChecked, setConfirmChecked] = React.useState(false)
 
-    // Get proposals assigned to this guide (supervisor matches current user) or pending proposals
+    // Get proposals assigned to this guide or unassigned pending proposals
     const guideRequests = proposals.filter(
-        (p) => p.supervisor === user?.name || p.status === "pending"
+        (p) => p.supervisor === user?.name || (p.status === "pending" && !p.supervisor)
     )
 
     // Computed metrics
@@ -145,7 +145,7 @@ export default function PendingRequestsPage() {
             </div>
 
             {/* Mini Metrics */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
                     <div className="p-2 bg-amber-50 text-amber-600 rounded-lg shrink-0"><Clock className="w-5 h-5" /></div>
                     <div className="min-w-0">

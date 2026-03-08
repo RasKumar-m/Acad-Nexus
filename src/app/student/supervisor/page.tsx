@@ -35,7 +35,7 @@ export default function SupervisorPage() {
     React.useEffect(() => {
         fetch("/api/users?role=guide")
             .then((r) => r.json())
-            .then(setGuides)
+            .then((data) => { if (Array.isArray(data)) setGuides(data) })
             .catch(console.error)
             .finally(() => setLoading(false))
     }, [])
@@ -46,7 +46,7 @@ export default function SupervisorPage() {
         [proposals, user?.email]
     )
 
-    // Find the assigned supervisor from guides list
+    // Find the assigned guide from guides list
     const assignedGuide = React.useMemo(
         () => myProposal?.supervisor ? guides.find((g) => g.name === myProposal.supervisor) : null,
         [myProposal, guides]
@@ -78,11 +78,11 @@ export default function SupervisorPage() {
 
     return (
         <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto">
-            {/* Current Supervisor Section */}
+            {/* Current Guide Section */}
             <Card className="shadow-sm border-slate-100">
                 <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="font-bold text-lg text-slate-900">Current Supervisor</h2>
+                        <h2 className="font-bold text-lg text-slate-900">Current Guide</h2>
                         {assignedGuide && <Badge variant="outline" className="text-xs font-semibold border-emerald-300 bg-emerald-50 text-emerald-700">Assigned</Badge>}
                     </div>
                     <Separator className="mb-5" />
@@ -114,14 +114,14 @@ export default function SupervisorPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-bold text-lg text-slate-900">{myProposal.supervisor}</h3>
-                                <p className="text-sm text-slate-500">Supervisor assigned to your project</p>
+                                <p className="text-sm text-slate-500">Guide assigned to your project</p>
                             </div>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-slate-400">
                             <UserCheck className="w-10 h-10 mb-3 text-slate-300" />
-                            <p className="font-medium text-lg text-slate-500">Supervisor not assigned yet.</p>
-                            <p className="text-sm mt-1">Browse available supervisors below to send a request.</p>
+                            <p className="font-medium text-lg text-slate-500">Guide not assigned yet.</p>
+                            <p className="text-sm mt-1">Browse available guides below to send a request.</p>
                         </div>
                     )}
                 </CardContent>
@@ -159,18 +159,18 @@ export default function SupervisorPage() {
                 </Card>
             )}
 
-            {/* Available Supervisors */}
+            {/* Available Guides */}
             {!myProposal?.supervisor && (
                 <Card className="shadow-sm border-slate-100 mb-8">
                     <CardContent className="p-6">
                         <div className="mb-4">
-                            <h2 className="font-bold text-lg text-slate-900">Available Supervisors</h2>
-                            <p className="text-sm text-slate-500 mt-0.5">Browse and request supervision from available faculty members</p>
+                            <h2 className="font-bold text-lg text-slate-900">Available Guides</h2>
+                            <p className="text-sm text-slate-500 mt-0.5">Browse and request a guide from available faculty members</p>
                         </div>
                         <Separator className="mb-5" />
 
                         {guides.length === 0 ? (
-                            <p className="text-center text-slate-400 py-8">No supervisors available at this time.</p>
+                            <p className="text-center text-slate-400 py-8">No guides available at this time.</p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {guides.map((guide, idx) => (
@@ -190,7 +190,7 @@ export default function SupervisorPage() {
                                                 <div><p className="text-xs font-semibold text-slate-500">Expertise</p><p className="text-sm text-slate-800">{guide.expertise || "N/A"}</p></div>
                                             </div>
                                             <Button className="w-full gap-2 bg-blue-500 hover:bg-blue-600 text-white mt-auto" disabled={!myProposal} onClick={() => handleRequestClick(guide)}>
-                                                <UserCheck className="w-4 h-4" /> Request Supervisor
+                                                <UserCheck className="w-4 h-4" /> Request Guide
                                             </Button>
                                         </CardContent>
                                     </Card>
@@ -205,7 +205,7 @@ export default function SupervisorPage() {
             <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-lg flex items-center gap-2"><UserCheck className="w-5 h-5 text-blue-600" /> Request Supervisor</DialogTitle>
+                        <DialogTitle className="text-lg flex items-center gap-2"><UserCheck className="w-5 h-5 text-blue-600" /> Request Guide</DialogTitle>
                     </DialogHeader>
                     {requestTarget && (
                         <div className="py-3 space-y-4">

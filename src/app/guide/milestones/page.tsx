@@ -41,6 +41,7 @@ import {
     Download,
     LayoutGrid,
     TableProperties,
+    Link2,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useProposals } from "@/lib/proposal-context"
@@ -55,6 +56,8 @@ interface MilestoneItem {
     status: "pending" | "submitted" | "reviewed"
     fileUrl: string | null
     fileName: string | null
+    submissionLink: string | null
+    linkType: string | null
     submittedAt: string | null
     createdAt: string
 }
@@ -566,6 +569,17 @@ export default function GuideMilestonesPage() {
                                                                 <Download className="w-3 h-3" />
                                                             </a>
                                                         </div>
+                                                    ) : milestone.submissionLink ? (
+                                                        <a
+                                                            href={milestone.submissionLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200"
+                                                            title={milestone.submissionLink}
+                                                        >
+                                                            <Link2 className="w-3 h-3" />
+                                                            {milestone.linkType === "github" ? "GitHub" : milestone.linkType === "drive" ? "Drive" : milestone.linkType === "figma" ? "Figma" : "Link"}
+                                                        </a>
                                                     ) : (
                                                         <span className="text-xs text-slate-400">—</span>
                                                     )}
