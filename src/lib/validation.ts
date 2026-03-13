@@ -13,6 +13,7 @@ export interface NormalizedUserInput {
     email: string
     password?: string
     role?: UserRoleDb
+    rollNumber?: string
     department?: string
     expertise?: string
     maxStudents?: number
@@ -81,6 +82,7 @@ export function normalizeUserInput(raw: Record<string, unknown>): NormalizedUser
         email: String(raw.email ?? "").toLowerCase().trim(),
         password: raw.password !== undefined ? String(raw.password) : undefined,
         role: raw.role ? normalizeRole(String(raw.role)) ?? undefined : undefined,
+        rollNumber: raw.rollNumber !== undefined ? String(raw.rollNumber).trim().toUpperCase() : undefined,
         department: raw.department !== undefined ? String(raw.department).trim() : undefined,
         expertise: raw.expertise !== undefined ? String(raw.expertise).trim() : undefined,
         maxStudents: raw.maxStudents !== undefined ? Number(raw.maxStudents) : undefined,

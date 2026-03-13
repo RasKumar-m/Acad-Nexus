@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         const body = zodParsed.data
 
         const allowed: Record<string, unknown> = {}
-        const safeFields = ["name", "email", "department", "expertise", "maxStudents", "role", "assignedGuideId", "assignedGuideName"] as const
+        const safeFields = ["name", "email", "department", "expertise", "maxStudents", "role", "rollNumber", "assignedGuideId", "assignedGuideName"] as const
         for (const key of safeFields) {
             if (body[key] !== undefined) {
                 allowed[key] = body[key]

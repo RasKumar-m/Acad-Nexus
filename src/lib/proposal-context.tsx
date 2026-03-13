@@ -4,7 +4,7 @@ import * as React from "react"
 import { useSession } from "next-auth/react"
 
 // ─── Types ──────────────────────────────────────────────────────────
-export type ProposalStatus = "pending" | "approved" | "rejected" | "completed"
+export type ProposalStatus = "draft" | "pending" | "approved" | "rejected" | "completed"
 
 export interface ProposalRemark {
     _id?: string
@@ -17,6 +17,13 @@ export interface ProposalRemark {
     action?: "approved" | "rejected" | "feedback"
 }
 
+export interface ProposalTeamMember {
+    userId: string
+    name: string
+    email: string
+    rollNumber?: string
+}
+
 export interface Proposal {
     _id: string
     id?: number          // kept for backward compat in UI
@@ -24,6 +31,10 @@ export interface Proposal {
     description: string
     studentName: string
     studentEmail: string
+    leaderId?: string
+    teamMembers: ProposalTeamMember[]
+    teamCode?: string
+    teamLocked?: boolean
     status: ProposalStatus
     submittedDate?: string
     createdAt?: string
@@ -80,6 +91,17 @@ function normalise(raw: Record<string, unknown>): Proposal {
         description: String(raw.description ?? ""),
         studentName: String(raw.studentName ?? ""),
         studentEmail: String(raw.studentEmail ?? ""),
+        leaderId: raw.leaderId ? String(raw.leaderId) : undefined,
+        teamMembers: Array.isArray(raw.teamMembers)
+            ? (raw.teamMembers as Array<Record<string, unknown>>).map((m) => ({
+                  userId: String(m.userId ?? ""),
+                  name: String(m.name ?? ""),
+                  email: String(m.email ?? ""),
+                  rollNumber: m.rollNumber ? String(m.rollNumber) : undefined,
+              }))
+            : [],
+        teamCode: raw.teamCode ? String(raw.teamCode) : undefined,
+        teamLocked: raw.teamLocked === true,
         status: (raw.status ?? "pending") as ProposalStatus,
         submittedDate: formatDate(raw.createdAt as string),
         createdAt: String(raw.createdAt ?? ""),
@@ -265,7 +287,12 @@ export function ProposalProvider({ children }: { children: React.ReactNode }) {
 
     // ── Queries ─────────────────────────────────────────────────────
     const getProposalsByStudent = React.useCallback(
-        (email: string) => proposals.filter((p) => p.studentEmail === email),
+        (email: string) =>
+            proposals.filter(
+                (p) =>
+                    p.teamMembers.some((m) => m.email === email) ||
+                    p.studentEmail === email // backward compat for legacy data
+            ),
         [proposals]
     )
 

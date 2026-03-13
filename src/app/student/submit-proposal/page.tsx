@@ -25,16 +25,33 @@ import {
     Trash2,
     MessageSquare,
     User,
+    Users,
     Paperclip,
     ExternalLink,
     Loader2,
     Upload,
     CloudUpload,
-    X,
+    Copy,
+    LogOut,
+    Lock,
+    Plus,
+    Crown,
 } from "lucide-react"
-import { useProposals, type ProposalStatus } from "@/lib/proposal-context"
+import { useProposals, type ProposalStatus, type ProposalTeamMember } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
 import { useUploadThing } from "@/lib/uploadthing"
+
+// ─── Types ──────────────────────────────────────────────────────────
+interface TeamData {
+    _id: string
+    teamCode: string
+    teamMembers: ProposalTeamMember[]
+    teamLocked: boolean
+    status: string
+    leaderId: string
+    title: string
+    description: string
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function statusConfig(status: ProposalStatus | "none") {
@@ -64,15 +81,29 @@ function remarkActionBadge(action?: string) {
 // ─── Page ───────────────────────────────────────────────────────────
 export default function SubmitProposalPage() {
     const { user } = useAuth()
-    const { addProposal, editProposal, deleteProposal, getProposalsByStudent, loading: proposalsLoading } = useProposals()
+    const { editProposal, deleteProposal, getProposalsByStudent, refreshProposals, loading: proposalsLoading } = useProposals()
 
+    // ── Team state (draft/lobby) ────────────────────────────────────
+    const [team, setTeam] = React.useState<TeamData | null>(null)
+    const [teamLoading, setTeamLoading] = React.useState(true)
+    const [teamError, setTeamError] = React.useState("")
+    const [actionLoading, setActionLoading] = React.useState(false)
+
+    // Join code input
+    const [joinCode, setJoinCode] = React.useState("")
+
+    // Lock & Submit form
     const [title, setTitle] = React.useState("")
     const [description, setDescription] = React.useState("")
     const [fileUrl, setFileUrl] = React.useState("")
     const [fileName, setFileName] = React.useState("")
     const [fileType, setFileType] = React.useState("")
-    const [confirmOpen, setConfirmOpen] = React.useState(false)
+    const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false)
     const [successOpen, setSuccessOpen] = React.useState(false)
+    const [codeCopied, setCodeCopied] = React.useState(false)
+
+    // Leave team confirmation
+    const [leaveOpen, setLeaveOpen] = React.useState(false)
 
     // Edit state
     const [editOpen, setEditOpen] = React.useState(false)
@@ -86,7 +117,7 @@ export default function SubmitProposalPage() {
     const [deleteTarget, setDeleteTarget] = React.useState<string | null>(null)
     const [deleteDeleting, setDeleteDeleting] = React.useState(false)
 
-    // Custom upload state
+    // File upload state
     const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
     const [uploadProgress, setUploadProgress] = React.useState(0)
     const [uploadError, setUploadError] = React.useState("")
@@ -102,36 +133,131 @@ export default function SubmitProposalPage() {
     })
 
     const studentEmail = user?.email ?? ""
-    const studentName = user?.name ?? ""
     const myProposals = getProposalsByStudent(studentEmail)
-    const latestProposal = myProposals.length > 0 ? myProposals[0] : null
+    const isLeader = team ? team.leaderId === user?.id : false
+    const canLock = title.trim().length > 0 && description.trim().length >= 20 && (team?.teamMembers.length ?? 0) >= 2
 
-    const canSubmit = title.trim().length > 0 && description.trim().length >= 20
+    // ── Fetch team on mount ─────────────────────────────────────────
+    const fetchTeam = React.useCallback(async () => {
+        try {
+            const res = await fetch("/api/teams/my")
+            const data = await res.json()
+            if (data.team && data.team.status === "draft") {
+                setTeam(data.team)
+            } else {
+                setTeam(null)
+            }
+        } catch {
+            setTeam(null)
+        } finally {
+            setTeamLoading(false)
+        }
+    }, [])
 
-    function handleSubmitClick() {
-        if (!canSubmit) return
-        setConfirmOpen(true)
+    React.useEffect(() => { fetchTeam() }, [fetchTeam])
+
+    // ── Team actions ────────────────────────────────────────────────
+    async function handleStartProject() {
+        setActionLoading(true)
+        setTeamError("")
+        try {
+            const res = await fetch("/api/teams/init", { method: "POST" })
+            const data = await res.json()
+            if (!res.ok) {
+                setTeamError(data.error || "Failed to start project")
+                return
+            }
+            await fetchTeam()
+        } catch {
+            setTeamError("Network error. Please try again.")
+        } finally {
+            setActionLoading(false)
+        }
     }
 
-    async function handleConfirmSubmit() {
-        await addProposal(
-            title.trim(),
-            description.trim(),
-            studentName,
-            studentEmail,
-            user?.id ?? "",
-            fileUrl || undefined,
-            fileType || undefined
-        )
-        setTitle("")
-        setDescription("")
-        setFileUrl("")
-        setFileName("")
-        setFileType("")
-        setConfirmOpen(false)
-        setSuccessOpen(true)
+    async function handleJoinTeam() {
+        if (!joinCode.trim()) return
+        setActionLoading(true)
+        setTeamError("")
+        try {
+            const res = await fetch("/api/teams/join", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ teamCode: joinCode.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                setTeamError(data.error || "Failed to join team")
+                return
+            }
+            setJoinCode("")
+            await fetchTeam()
+        } catch {
+            setTeamError("Network error. Please try again.")
+        } finally {
+            setActionLoading(false)
+        }
     }
 
+    async function handleLeaveTeam() {
+        setActionLoading(true)
+        setTeamError("")
+        try {
+            const res = await fetch("/api/teams/leave", { method: "POST" })
+            const data = await res.json()
+            if (!res.ok) {
+                setTeamError(data.error || "Failed to leave team")
+                return
+            }
+            setTeam(null)
+            setLeaveOpen(false)
+        } catch {
+            setTeamError("Network error. Please try again.")
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
+    async function handleLockAndSubmit() {
+        if (!team || !canLock) return
+        setActionLoading(true)
+        setTeamError("")
+        try {
+            const res = await fetch("/api/teams/lock", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    proposalId: team._id,
+                    title: title.trim(),
+                    description: description.trim(),
+                    attachedFileUrl: fileUrl || null,
+                    attachedFileType: fileType || null,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                setTeamError(data.error || "Failed to submit proposal")
+                return
+            }
+            setTeam(null)
+            setLockConfirmOpen(false)
+            setSuccessOpen(true)
+            await refreshProposals()
+        } catch {
+            setTeamError("Network error. Please try again.")
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
+    function copyTeamCode() {
+        if (!team?.teamCode) return
+        navigator.clipboard.writeText(team.teamCode)
+        setCodeCopied(true)
+        setTimeout(() => setCodeCopied(false), 2000)
+    }
+
+    // ── Edit / Delete handlers ──────────────────────────────────────
     function openEdit(proposal: { _id: string; title: string; description: string }) {
         setEditTarget(proposal._id)
         setEditTitle(proposal.title)
@@ -168,7 +294,8 @@ export default function SubmitProposalPage() {
         }
     }
 
-    if (proposalsLoading) {
+    // ── Loading ─────────────────────────────────────────────────────
+    if (proposalsLoading || teamLoading) {
         return (
             <div className="flex items-center justify-center min-h-96">
                 <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
@@ -176,192 +303,386 @@ export default function SubmitProposalPage() {
         )
     }
 
+    // Determine view: draft lobby vs normal
+    const hasSubmittedProposals = myProposals.length > 0
+    const hasDraftTeam = team !== null
+    const showStartOptions = !hasDraftTeam && (!hasSubmittedProposals || myProposals.every(p => p.status === "rejected"))
+
     return (
         <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto">
             {/* ─── Header ─────────────────────────────────────── */}
             <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                    Submit Proposal
+                    {hasDraftTeam ? "Team Lobby" : "Project Proposal"}
                 </h1>
                 <p className="text-sm text-slate-500 mt-1">
-                    Please fill out all sections of your project proposal. Make sure to be detailed and clear about your project goals.
+                    {hasDraftTeam
+                        ? "Manage your team and submit your proposal when ready."
+                        : showStartOptions
+                            ? "Start a new project or join an existing team to begin."
+                            : "View and manage your submitted proposals."
+                    }
                 </p>
             </div>
 
-            {/* ─── Proposal Form (only if no pending/approved proposal) ── */}
-            {(!latestProposal || latestProposal.status === "rejected") && (
-                <Card className="shadow-sm border-slate-100">
-                    <CardContent className="p-6 space-y-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="project-title" className="font-semibold text-sm text-slate-700">
-                                Project Title
-                            </Label>
-                            <Input
-                                id="project-title"
-                                placeholder="Enter your project title"
-                                className="bg-white"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                            />
-                        </div>
+            {/* ─── Error Banner ────────────────────────────────── */}
+            {teamError && (
+                <div className="flex items-center gap-2 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    {teamError}
+                    <button className="ml-auto text-red-400 hover:text-red-600" onClick={() => setTeamError("")}>
+                        &times;
+                    </button>
+                </div>
+            )}
 
-                        <div className="space-y-2">
-                            <Label htmlFor="project-desc" className="font-semibold text-sm text-slate-700">
-                                Project Description
-                            </Label>
-                            <textarea
-                                id="project-desc"
-                                rows={6}
-                                placeholder="Provide a detailed description of your project..."
-                                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                            />
-                            {description.length > 0 && description.length < 20 && (
-                                <p className="text-xs text-amber-600">
-                                    Description should be at least 20 characters ({20 - description.length} more needed)
+            {/* ════════════════════════════════════════════════════
+                STATE 1: No Team — Start a Project or Join
+            ════════════════════════════════════════════════════ */}
+            {showStartOptions && (
+                <div className="grid gap-6 md:grid-cols-2">
+                    {/* Start a Project */}
+                    <Card className="shadow-sm border-slate-100 hover:border-blue-200 transition-colors">
+                        <CardContent className="p-6 flex flex-col items-center text-center gap-4">
+                            <div className="p-4 bg-blue-50 rounded-full">
+                                <Plus className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-lg text-slate-900">Start a Project</h2>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Create a new team and get a join code to share with your teammates.
                                 </p>
-                            )}
-                        </div>
+                            </div>
+                            <Button
+                                className="gap-2 bg-blue-600 hover:bg-blue-700 text-white w-full"
+                                disabled={actionLoading}
+                                onClick={handleStartProject}
+                            >
+                                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                                Start a Project
+                            </Button>
+                        </CardContent>
+                    </Card>
 
-                        <div className="space-y-3">
-                            <Label className="font-semibold text-sm text-slate-700">Attach Proposal File (Optional)</Label>
-                            {!fileUrl ? (
-                                <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-6 transition-colors text-center">
-                                    {!selectedFile && !isUploading ? (
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="p-3 bg-blue-50 rounded-full">
-                                                <CloudUpload className="w-6 h-6 text-blue-500" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-slate-700">
-                                                    Choose a file to attach
-                                                </p>
-                                                <p className="text-xs text-slate-400 mt-1">
-                                                    PDF, DOC, DOCX, PPT, PPTX, ZIP, RAR &middot; Max 32MB
-                                                </p>
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
-                                                onClick={() => fileInputRef.current?.click()}
-                                            >
-                                                <Upload className="w-4 h-4" />
-                                                Browse Files
-                                            </Button>
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-rar-compressed,application/gzip"
-                                                className="hidden"
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0]
-                                                    if (!file) return
-                                                    setSelectedFile(file)
-                                                    setUploadError("")
-                                                    setUploadProgress(0)
+                    {/* Join with Code */}
+                    <Card className="shadow-sm border-slate-100 hover:border-emerald-200 transition-colors">
+                        <CardContent className="p-6 flex flex-col items-center text-center gap-4">
+                            <div className="p-4 bg-emerald-50 rounded-full">
+                                <Send className="w-8 h-8 text-emerald-600" />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-lg text-slate-900">Join a Team</h2>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Enter the team code shared by your team leader to join their project.
+                                </p>
+                            </div>
+                            <div className="w-full space-y-3">
+                                <Input
+                                    placeholder="e.g. NEXUS-AB3K"
+                                    className="bg-white text-center font-mono text-lg tracking-wider uppercase"
+                                    value={joinCode}
+                                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                    maxLength={10}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleJoinTeam() }}
+                                />
+                                <Button
+                                    className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+                                    disabled={actionLoading || !joinCode.trim()}
+                                    onClick={handleJoinTeam}
+                                >
+                                    {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    Join Team
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
-                                                    // Start upload immediately
-                                                    try {
-                                                        const res = await startUpload([file])
-                                                        if (!res?.[0]) {
-                                                            setUploadError("Upload failed. Please try again.")
-                                                            setSelectedFile(null)
-                                                            return
-                                                        }
-                                                        const uploaded = res[0]
-                                                        setFileUrl(uploaded.ufsUrl)
-                                                        setFileName(uploaded.name)
-                                                        const ext = uploaded.name.split(".").pop()?.toLowerCase() || "file"
-                                                        setFileType(ext)
-                                                        setSelectedFile(null)
-                                                        setUploadProgress(0)
-                                                    } catch (err) {
-                                                        setUploadError(err instanceof Error ? err.message : "Upload failed.")
-                                                        setSelectedFile(null)
-                                                        setUploadProgress(0)
-                                                    }
-                                                }}
-                                            />
+            {/* ════════════════════════════════════════════════════
+                STATE 2: Draft Team — Team Lobby
+            ════════════════════════════════════════════════════ */}
+            {hasDraftTeam && (
+                <>
+                    {/* Team Code Card */}
+                    <Card className="shadow-sm border-blue-100 bg-gradient-to-br from-blue-50/50 to-white">
+                        <CardContent className="p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-blue-100 text-blue-600 rounded-xl">
+                                        <Users className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h2 className="font-bold text-lg text-slate-900">Team Code</h2>
+                                        <p className="text-xs text-slate-500">Share this code with your teammates</p>
+                                    </div>
+                                </div>
+                                <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700 text-xs">
+                                    Draft
+                                </Badge>
+                            </div>
+
+                            <div className="flex items-center justify-center gap-3 py-3">
+                                <span className="font-mono text-3xl font-bold tracking-[0.2em] text-blue-700 select-all">
+                                    {team.teamCode}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                                    onClick={copyTeamCode}
+                                >
+                                    {codeCopied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    {codeCopied ? "Copied!" : "Copy"}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Team Members */}
+                    <Card className="shadow-sm border-slate-100">
+                        <CardContent className="p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-semibold text-sm text-slate-700 uppercase tracking-wider">
+                                    Team Members ({team.teamMembers.length}/5)
+                                </h3>
+                                {team.teamMembers.length < 2 && (
+                                    <span className="text-xs text-amber-600 font-medium">Minimum 2 required</span>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                {team.teamMembers.map((member, i) => (
+                                    <div
+                                        key={member.userId || i}
+                                        className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white"
+                                    >
+                                        <div className="p-1.5 bg-slate-100 rounded-full">
+                                            <User className="w-4 h-4 text-slate-600" />
                                         </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 w-full max-w-md">
-                                                <FileText className="w-5 h-5 text-blue-500 shrink-0" />
-                                                <div className="min-w-0 flex-1 text-left">
-                                                    <p className="text-sm font-medium text-slate-800 truncate">{selectedFile?.name}</p>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-slate-800 truncate">
+                                                {member.name}
+                                                {member.userId === team.leaderId && (
+                                                    <span className="inline-flex items-center gap-1 ml-2 text-xs text-amber-600 font-semibold">
+                                                        <Crown className="w-3 h-3" /> Leader
+                                                    </span>
+                                                )}
+                                            </p>
+                                            <p className="text-xs text-slate-500 truncate">
+                                                {member.email}
+                                                {member.rollNumber && ` · ${member.rollNumber}`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Leave Team Button */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                                disabled={actionLoading}
+                                onClick={() => setLeaveOpen(true)}
+                            >
+                                <LogOut className="w-3.5 h-3.5" />
+                                {isLeader ? "Disband Team" : "Leave Team"}
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* Lock & Submit Section — Leader Only */}
+                    {isLeader ? (
+                        <Card className="shadow-sm border-slate-100">
+                            <CardContent className="p-6 space-y-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                                        <Lock className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h2 className="font-bold text-lg text-slate-900">Lock Team &amp; Submit Proposal</h2>
+                                        <p className="text-xs text-slate-500">Fill in your project details and submit when your team is ready</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="project-title" className="font-semibold text-sm text-slate-700">
+                                        Project Title
+                                    </Label>
+                                    <Input
+                                        id="project-title"
+                                        placeholder="Enter your project title"
+                                        className="bg-white"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="project-desc" className="font-semibold text-sm text-slate-700">
+                                        Project Description
+                                    </Label>
+                                    <textarea
+                                        id="project-desc"
+                                        rows={6}
+                                        placeholder="Provide a detailed description of your project..."
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                    />
+                                    {description.length > 0 && description.length < 20 && (
+                                        <p className="text-xs text-amber-600">
+                                            Description should be at least 20 characters ({20 - description.length} more needed)
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3">
+                                    <Label className="font-semibold text-sm text-slate-700">Attach Proposal File (Optional)</Label>
+                                    {!fileUrl ? (
+                                        <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-6 transition-colors text-center">
+                                            {!selectedFile && !isUploading ? (
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <div className="p-3 bg-blue-50 rounded-full">
+                                                        <CloudUpload className="w-6 h-6 text-blue-500" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-slate-700">Choose a file to attach</p>
+                                                        <p className="text-xs text-slate-400 mt-1">PDF, DOC, DOCX, PPT, PPTX, ZIP, RAR &middot; Max 32MB</p>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                    >
+                                                        <Upload className="w-4 h-4" />
+                                                        Browse Files
+                                                    </Button>
+                                                    <input
+                                                        ref={fileInputRef}
+                                                        type="file"
+                                                        accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-rar-compressed,application/gzip"
+                                                        className="hidden"
+                                                        onChange={async (e) => {
+                                                            const file = e.target.files?.[0]
+                                                            if (!file) return
+                                                            setSelectedFile(file)
+                                                            setUploadError("")
+                                                            setUploadProgress(0)
+                                                            try {
+                                                                const res = await startUpload([file])
+                                                                if (!res?.[0]) {
+                                                                    setUploadError("Upload failed. Please try again.")
+                                                                    setSelectedFile(null)
+                                                                    return
+                                                                }
+                                                                const uploaded = res[0]
+                                                                setFileUrl(uploaded.ufsUrl)
+                                                                setFileName(uploaded.name)
+                                                                const ext = uploaded.name.split(".").pop()?.toLowerCase() || "file"
+                                                                setFileType(ext)
+                                                                setSelectedFile(null)
+                                                                setUploadProgress(0)
+                                                            } catch (err) {
+                                                                setUploadError(err instanceof Error ? err.message : "Upload failed.")
+                                                                setSelectedFile(null)
+                                                                setUploadProgress(0)
+                                                            }
+                                                        }}
+                                                    />
                                                 </div>
-                                            </div>
-                                            {isUploading && (
-                                                <div className="w-full max-w-md space-y-2">
-                                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                                                            style={{ width: `${uploadProgress}%` }}
-                                                        />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 w-full max-w-md">
+                                                        <FileText className="w-5 h-5 text-blue-500 shrink-0" />
+                                                        <div className="min-w-0 flex-1 text-left">
+                                                            <p className="text-sm font-medium text-slate-800 truncate">{selectedFile?.name}</p>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                        Uploading... {uploadProgress}%
-                                                    </div>
+                                                    {isUploading && (
+                                                        <div className="w-full max-w-md space-y-2">
+                                                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                                                            </div>
+                                                            <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                Uploading... {uploadProgress}%
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {uploadError && (
+                                                <div className="mt-3 flex items-center justify-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                                                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                                                    {uploadError}
                                                 </div>
                                             )}
                                         </div>
-                                    )}
-                                    {uploadError && (
-                                        <div className="mt-3 flex items-center justify-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-                                            <AlertTriangle className="w-4 h-4 shrink-0" />
-                                            {uploadError}
+                                    ) : (
+                                        <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-slate-800 truncate">{fileName}</p>
+                                                <p className="text-xs text-slate-500 uppercase">{fileType}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="gap-1.5">
+                                                        <ExternalLink className="w-3.5 h-3.5" /> View
+                                                    </a>
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setFileUrl("")
+                                                        setFileName("")
+                                                        setFileType("")
+                                                        if (fileInputRef.current) fileInputRef.current.value = ""
+                                                    }}
+                                                >
+                                                    Replace
+                                                </Button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                            ) : (
-                                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium text-slate-800 truncate">{fileName}</p>
-                                        <p className="text-xs text-slate-500 uppercase">{fileType}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <Button variant="outline" size="sm" asChild>
-                                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="gap-1.5">
-                                                <ExternalLink className="w-3.5 h-3.5" /> View
-                                            </a>
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                setFileUrl("")
-                                                setFileName("")
-                                                setFileType("")
-                                                if (fileInputRef.current) fileInputRef.current.value = ""
-                                            }}
-                                        >
-                                            Replace
-                                        </Button>
-                                    </div>
+
+                                <Separator />
+
+                                <div className="flex justify-end">
+                                    <Button
+                                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6"
+                                        disabled={!canLock || actionLoading}
+                                        onClick={() => setLockConfirmOpen(true)}
+                                    >
+                                        {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                                        Lock Team &amp; Submit Proposal
+                                    </Button>
                                 </div>
-                            )}
-                        </div>
-
-                        <Separator />
-
-                        <div className="flex justify-end">
-                            <Button
-                                className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6"
-                                disabled={!canSubmit}
-                                onClick={handleSubmitClick}
-                            >
-                                <Send className="w-4 h-4" />
-                                Submit Proposal
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        /* Non-leader waiting state */
+                        <Card className="shadow-sm border-slate-100">
+                            <CardContent className="p-6 text-center space-y-3">
+                                <div className="p-3 bg-amber-50 rounded-full inline-block">
+                                    <Clock className="w-6 h-6 text-amber-600" />
+                                </div>
+                                <h3 className="font-bold text-lg text-slate-900">Waiting for Team Leader</h3>
+                                <p className="text-sm text-slate-500 max-w-md mx-auto">
+                                    The team leader will fill in the project details and submit the proposal once the team is ready.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+                </>
             )}
 
-            {/* ─── Submitted Proposal Cards ───────────────────── */}
+            {/* ════════════════════════════════════════════════════
+                STATE 3: Submitted Proposal Cards
+            ════════════════════════════════════════════════════ */}
             {myProposals.map((proposal) => (
                 <Card key={proposal._id} className="shadow-sm border-slate-100">
                     <CardContent className="p-6 space-y-5">
@@ -383,13 +704,25 @@ export default function SubmitProposalPage() {
                             </Badge>
                         </div>
 
-                        {/* Edit / Delete actions — only enabled for pending proposals */}
+                        {/* Team Members (for submitted proposals) */}
+                        {proposal.teamMembers && proposal.teamMembers.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {proposal.teamMembers.map((m, i) => (
+                                    <Badge key={m.userId || i} variant="outline" className="text-xs border-slate-300 gap-1">
+                                        <User className="w-3 h-3" />
+                                        {m.name}
+                                        {m.userId === proposal.leaderId && <Crown className="w-3 h-3 text-amber-500" />}
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Edit / Delete actions */}
                         <div className="flex items-center gap-2">
                             <Button
                                 size="sm"
                                 variant="outline"
                                 className="h-8 gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
-                                disabled={proposal.status !== "pending"}
                                 onClick={() => openEdit(proposal)}
                             >
                                 <Edit3 className="w-3.5 h-3.5" /> Edit
@@ -398,7 +731,6 @@ export default function SubmitProposalPage() {
                                 size="sm"
                                 variant="outline"
                                 className="h-8 gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
-                                disabled={proposal.status !== "pending"}
                                 onClick={() => { setDeleteTarget(proposal._id); setDeleteOpen(true) }}
                             >
                                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -480,31 +812,35 @@ export default function SubmitProposalPage() {
                 </Card>
             ))}
 
-            {/* ─── Empty State ────────────────────────────────── */}
-            {myProposals.length === 0 && (
+            {/* ─── Empty State (no team, no proposals) ────────── */}
+            {!hasDraftTeam && myProposals.length === 0 && (
                 <div className="text-center py-12 text-slate-400">
                     <FileText className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm font-medium">No proposals submitted yet</p>
-                    <p className="text-xs mt-1">Fill out the form above to submit your first proposal</p>
+                    <p className="text-sm font-medium">No proposals yet</p>
+                    <p className="text-xs mt-1">Start a project or join a team to get started</p>
                 </div>
             )}
 
-            {/* ─── Confirm Submit Dialog ──────────────────────── */}
-            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            {/* ─── Lock & Submit Confirmation Dialog ──────────── */}
+            <Dialog open={lockConfirmOpen} onOpenChange={setLockConfirmOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-lg flex items-center gap-2">
-                            <Send className="w-5 h-5 text-blue-600" />
+                            <Lock className="w-5 h-5 text-emerald-600" />
                             Confirm Submission
                         </DialogTitle>
                     </DialogHeader>
                     <div className="py-3 space-y-3">
                         <p className="text-sm text-slate-600">
-                            Are you sure you want to submit this proposal?
+                            This will <strong>lock the team</strong> (no more members can join) and submit the proposal for review. This cannot be undone.
                         </p>
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
                             <p className="font-semibold text-sm text-slate-900">{title}</p>
                             <p className="text-xs text-slate-600 line-clamp-3">{description}</p>
+                            <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                                <Users className="w-3.5 h-3.5" />
+                                {team?.teamMembers.length} team member{(team?.teamMembers.length ?? 0) !== 1 ? "s" : ""}
+                            </div>
                             {fileUrl && (
                                 <div className="flex items-center gap-1.5 text-xs text-slate-600">
                                     <Paperclip className="w-3.5 h-3.5" />
@@ -512,20 +848,18 @@ export default function SubmitProposalPage() {
                                 </div>
                             )}
                         </div>
-                        <p className="text-xs text-slate-500">
-                            Your proposal will be sent to the admin for review.
-                        </p>
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0">
                         <DialogClose asChild>
                             <Button variant="outline">Cancel</Button>
                         </DialogClose>
                         <Button
-                            className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
-                            onClick={handleConfirmSubmit}
+                            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            disabled={actionLoading}
+                            onClick={handleLockAndSubmit}
                         >
-                            <Send className="w-4 h-4" />
-                            Confirm Submit
+                            {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                            Lock &amp; Submit
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -541,7 +875,7 @@ export default function SubmitProposalPage() {
                         <div>
                             <h3 className="font-bold text-lg text-slate-900">Proposal Submitted!</h3>
                             <p className="text-sm text-slate-500 mt-1">
-                                Your proposal has been submitted successfully and is awaiting admin review.
+                                Your team&apos;s proposal has been submitted and is awaiting review.
                             </p>
                         </div>
                         <Button
@@ -551,6 +885,41 @@ export default function SubmitProposalPage() {
                             Done
                         </Button>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ─── Leave Team Dialog ──────────────────────────── */}
+            <Dialog open={leaveOpen} onOpenChange={(open) => { if (!actionLoading) setLeaveOpen(open) }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                            {isLeader ? "Disband Team" : "Leave Team"}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-3 space-y-3">
+                        {isLeader ? (
+                            <p className="text-sm text-slate-600">
+                                As the team leader, leaving will <strong>disband the entire team</strong> and remove all members. This cannot be undone.
+                            </p>
+                        ) : (
+                            <p className="text-sm text-slate-600">
+                                Are you sure you want to leave this team? You can join another team after leaving.
+                            </p>
+                        )}
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <DialogClose asChild><Button variant="outline" disabled={actionLoading}>Cancel</Button></DialogClose>
+                        <Button
+                            className="gap-1.5 bg-red-600 hover:bg-red-700 text-white"
+                            disabled={actionLoading}
+                            onClick={handleLeaveTeam}
+                        >
+                            {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                            <LogOut className="w-4 h-4" />
+                            {isLeader ? "Disband Team" : "Leave Team"}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         const since = new Date()
         since.setDate(since.getDate() - days + 1)
 
-        const proposals = await Proposal.find({ studentEmail })
+        const proposals = await Proposal.find({ "teamMembers.email": studentEmail })
             .select("milestones")
             .lean()
 

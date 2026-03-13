@@ -53,6 +53,24 @@ const MilestoneSchema = new Schema<IMilestone>(
     { timestamps: { createdAt: true, updatedAt: false } }
 )
 
+// ─── Team Member Sub-document ───────────────────────────────────────
+export interface ITeamMember {
+    userId: Types.ObjectId
+    name: string
+    email: string
+    rollNumber?: string
+}
+
+const TeamMemberSchema = new Schema<ITeamMember>(
+    {
+        userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        name: { type: String, required: true, trim: true },
+        email: { type: String, required: true, lowercase: true, trim: true },
+        rollNumber: { type: String, trim: true, uppercase: true, default: null },
+    },
+    { _id: false }
+)
+
 // ─── Proposal Interface ─────────────────────────────────────────────
 export interface IProposal extends Document {
     title: string
@@ -60,9 +78,13 @@ export interface IProposal extends Document {
     studentId: Types.ObjectId
     studentName: string
     studentEmail: string
+    leaderId: Types.ObjectId
+    teamMembers: ITeamMember[]
+    teamCode: string
+    teamLocked: boolean
     guideId: Types.ObjectId | null
     supervisor: string | null
-    status: "pending" | "approved" | "rejected" | "completed"
+    status: "draft" | "pending" | "approved" | "rejected" | "completed"
     deadline: string | null
     attachedFileUrl: string | null
     attachedFileType: string | null
@@ -78,13 +100,13 @@ const ProposalSchema = new Schema<IProposal>(
     {
         title: {
             type: String,
-            required: [true, "Title is required"],
             trim: true,
+            default: "",
         },
         description: {
             type: String,
-            required: [true, "Description is required"],
             trim: true,
+            default: "",
         },
         studentId: {
             type: Schema.Types.ObjectId,
@@ -102,6 +124,30 @@ const ProposalSchema = new Schema<IProposal>(
             lowercase: true,
             trim: true,
         },
+        leaderId: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            required: [true, "Team leader ID is required"],
+        },
+        teamMembers: {
+            type: [TeamMemberSchema],
+            default: [],
+            validate: {
+                validator: (arr: ITeamMember[]) => arr.length <= 5,
+                message: "A team can have at most 5 members",
+            },
+        },
+        teamCode: {
+            type: String,
+            unique: true,
+            uppercase: true,
+            trim: true,
+            maxlength: [10, "Team code must be at most 10 characters"],
+        },
+        teamLocked: {
+            type: Boolean,
+            default: false,
+        },
         guideId: {
             type: Schema.Types.ObjectId,
             ref: "User",
@@ -113,8 +159,8 @@ const ProposalSchema = new Schema<IProposal>(
         },
         status: {
             type: String,
-            enum: ["pending", "approved", "rejected", "completed"],
-            default: "pending",
+            enum: ["draft", "pending", "approved", "rejected", "completed"],
+            default: "draft",
         },
         deadline: {
             type: String,

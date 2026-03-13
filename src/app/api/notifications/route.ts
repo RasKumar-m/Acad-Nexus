@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Notification from "@/models/Notification"
+import User from "@/models/User"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { createNotificationSchema, markAllReadSchema, parseBody } from "@/lib/zod-schemas"
+import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
 
 // GET /api/notifications?email=...&unread=true&audience=...&role=...  — list notifications
 export async function GET(req: NextRequest) {
@@ -87,6 +89,26 @@ export async function POST(req: NextRequest) {
             relatedId: body.relatedId || "",
             ...(body.postedBy && { postedBy: body.postedBy }),
         })
+
+        // For student/global circulars, send announcement email to all students.
+        if (isCircular && (body.targetAudience === "student" || body.targetAudience === "all")) {
+            const students = await User.find({ role: "student" }).select("email").lean()
+            for (const student of students as Array<{ email?: string }>) {
+                if (!student.email) continue
+                sendNexusEmailNonBlocking({
+                    to: student.email,
+                    subject: `Announcement: ${body.title}`,
+                    heading: body.title,
+                    intro: "A new announcement has been posted by admin/guide.",
+                    blocks: [
+                        { label: "Announcement", value: body.message },
+                        { label: "Audience", value: body.targetAudience || "all" },
+                    ],
+                    ctaLabel: "Open Notifications",
+                    ctaUrl: getDefaultStudentDashboardUrl("/student/notifications"),
+                })
+            }
+        }
 
         return NextResponse.json(notification, { status: 201 })
     } catch (error: unknown) {

@@ -19,12 +19,22 @@ export const createFileSchema = z.object({
 })
 
 // ─── Proposals ──────────────────────────────────────────────────────
+
+const teamMemberSchema = z.object({
+    userId: objectId,
+    name: trimmedString(1, 100),
+    email: emailField,
+    rollNumber: z.string().trim().toUpperCase().max(30).optional(),
+})
+
 export const createProposalSchema = z.object({
     title: trimmedString(1, 300),
     description: trimmedString(1, 5000),
     studentId: objectId,
     studentName: trimmedString(1, 100),
     studentEmail: emailField,
+    leaderId: objectId,
+    teamMembers: z.array(teamMemberSchema).max(5).default([]),
     attachedFileUrl: z.string().url().max(2048).nullish(),
     attachedFileType: z.string().max(100).nullish(),
 })
@@ -37,7 +47,7 @@ export const patchProposalStudentSchema = z.object({
 })
 
 export const patchProposalAdminSchema = z.object({
-    status: z.enum(["pending", "approved", "rejected", "completed"]).optional(),
+    status: z.enum(["draft", "pending", "approved", "rejected", "completed"]).optional(),
     supervisor: z.string().max(100).nullish(),
     guideId: z.string().max(50).nullish(),
     deadline: z.string().max(50).nullish(),
@@ -106,6 +116,7 @@ export const createUserSchema = z.object({
     email: emailField,
     password: z.string().min(8).max(64),
     role: z.enum(["admin", "student", "guide"]),
+    rollNumber: z.string().trim().toUpperCase().max(30).optional(),
     department: z.string().max(100).optional(),
     expertise: z.string().max(200).optional(),
     maxStudents: z.number().int().min(1).max(50).optional(),
@@ -116,6 +127,7 @@ export const patchUserSchema = z.object({
     email: emailField.optional(),
     password: z.string().min(8).max(64).optional(),
     role: z.enum(["admin", "student", "guide"]).optional(),
+    rollNumber: z.string().trim().toUpperCase().max(30).nullish(),
     department: z.string().max(100).optional(),
     expertise: z.string().max(200).optional(),
     maxStudents: z.number().int().min(1).max(50).optional(),

@@ -124,17 +124,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             } catch (_) { /* non-critical */ }
         }
 
-        // Notify student when guide marks milestone as reviewed
+        // Notify all team members when guide marks milestone as reviewed
         if (isGuideReview) {
             try {
-                await Notification.create({
-                    userId: proposal.studentId,
-                    userEmail: proposal.studentEmail,
-                    type: "feedback",
-                    title: "Milestone Reviewed",
-                    message: `Your milestone "${milestoneTitle}" for project "${proposal.title}" has been reviewed by your guide.`,
-                    relatedId: String(proposal._id),
-                })
+                const members = (proposal.teamMembers ?? []) as unknown as Array<{ userId: string; email: string }>
+                await Promise.all(
+                    members.map((m) =>
+                        Notification.create({
+                            userId: String(m.userId),
+                            userEmail: m.email,
+                            type: "feedback",
+                            title: "Milestone Reviewed",
+                            message: `Your milestone "${milestoneTitle}" for project "${proposal.title}" has been reviewed by your guide.`,
+                            relatedId: String(proposal._id),
+                        })
+                    )
+                )
             } catch (_) { /* non-critical */ }
         }
 

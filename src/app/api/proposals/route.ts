@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
         await dbConnect()
 
         const email = req.nextUrl.searchParams.get("email")
-        const filter = email ? { studentEmail: email.toLowerCase().trim() } : {}
+        const filter = email
+            ? { "teamMembers.email": email.toLowerCase().trim(), status: { $ne: "draft" } }
+            : { status: { $ne: "draft" } }
         const proposals = await Proposal.find(filter).sort({ createdAt: -1 }).lean()
 
         return NextResponse.json(proposals)
@@ -47,6 +49,8 @@ export async function POST(req: NextRequest) {
             studentId: body.studentId,
             studentName: body.studentName,
             studentEmail: body.studentEmail,
+            leaderId: body.leaderId,
+            teamMembers: body.teamMembers,
             attachedFileUrl: body.attachedFileUrl || null,
             attachedFileType: body.attachedFileType || null,
         })

@@ -4,6 +4,7 @@ import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { createMilestoneSchema, parseBody } from "@/lib/zod-schemas"
+import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -102,16 +103,37 @@ export async function POST(req: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "Proposal not found" }, { status: 404 })
         }
 
-        // Notify the student about the new milestone
+        // Notify all team members about the new milestone
         try {
-            await Notification.create({
-                userId: proposal.studentId,
-                userEmail: proposal.studentEmail,
-                type: "deadline",
-                title: "New Milestone Assigned",
-                message: `A new milestone "${body.title}" (due ${body.dueDate}) has been added to your project "${proposal.title}".`,
-                relatedId: String(proposal._id),
-            })
+            const members = (proposal.teamMembers ?? []) as unknown as Array<{ userId: string; email: string }>
+            await Promise.all(
+                members.map((m) =>
+                    Notification.create({
+                        userId: String(m.userId),
+                        userEmail: m.email,
+                        type: "deadline",
+                        title: "New Milestone Assigned",
+                        message: `A new milestone "${body.title}" (due ${body.dueDate}) has been added to your project "${proposal.title}".`,
+                        relatedId: String(proposal._id),
+                    })
+                )
+            )
+
+            for (const m of members) {
+                sendNexusEmailNonBlocking({
+                    to: m.email,
+                    subject: "New Milestone Assigned",
+                    heading: "A New Milestone Was Added",
+                    intro: `A guide/admin has added a new milestone to your project "${proposal.title}".`,
+                    blocks: [
+                        { label: "Milestone", value: body.title },
+                        { label: "Due Date", value: body.dueDate },
+                        { label: "Project", value: String(proposal.title) },
+                    ],
+                    ctaLabel: "Open Milestones",
+                    ctaUrl: getDefaultStudentDashboardUrl("/student/milestones"),
+                })
+            }
         } catch (_) {
             // Non-critical
         }

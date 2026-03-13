@@ -4,6 +4,7 @@ import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { patchProposalStudentSchema, patchProposalAdminSchema, parseBody } from "@/lib/zod-schemas"
+import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -44,10 +45,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
         // Students can only edit title/description on their own pending proposals
         if (role === "student") {
-            const proposal = await Proposal.findById(id).select("studentId status").lean()
+            const proposal = await Proposal.findById(id).select("leaderId teamMembers status").lean()
             if (!proposal) return NextResponse.json({ error: "Proposal not found" }, { status: 404 })
-            if (String(proposal.studentId) !== session.user.id) {
-                return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+            // Only the team leader can edit
+            if (String(proposal.leaderId) !== session.user.id) {
+                return NextResponse.json({ error: "Only the team leader can edit the proposal" }, { status: 403 })
             }
             if (proposal.status !== "pending") {
                 return NextResponse.json({ error: "Only pending proposals can be edited" }, { status: 403 })
@@ -104,8 +106,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "Proposal not found" }, { status: 404 })
         }
 
-        // Auto-create notification for the student when status changes
-        if (adminBody.status && proposal.studentEmail) {
+        // Auto-create notification for all team members when status changes
+        if (adminBody.status && proposal.teamMembers && Array.isArray(proposal.teamMembers)) {
             const statusLabels: Record<string, string> = {
                 approved: "Approved",
                 rejected: "Rejected",
@@ -119,17 +121,59 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                     adminBody.remark?.message ||
                     `Your proposal "${proposal.title}" has been ${statusLabel.toLowerCase()}.`
                 try {
-                    await Notification.create({
-                        userId: proposal.studentId,
-                        userEmail: proposal.studentEmail,
-                        type: notifType,
-                        title: notifTitle,
-                        message: notifMessage,
-                        relatedId: String(proposal._id),
-                    })
+                    // Notify every team member
+                    const members = proposal.teamMembers as unknown as Array<{ userId: string; email: string; name?: string }>
+                    await Promise.all(
+                        members.map((m) =>
+                            Notification.create({
+                                userId: String(m.userId),
+                                userEmail: m.email,
+                                type: notifType,
+                                title: notifTitle,
+                                message: notifMessage,
+                                relatedId: String(proposal._id),
+                            })
+                        )
+                    )
+
+                    for (const m of members) {
+                        sendNexusEmailNonBlocking({
+                            to: m.email,
+                            subject: notifTitle,
+                            heading: notifTitle,
+                            intro: `There is a new update on your proposal \"${proposal.title}\".`,
+                            blocks: [
+                                { label: "Project", value: String(proposal.title) },
+                                { label: "Status", value: statusLabel },
+                                { label: "Message", value: notifMessage },
+                            ],
+                            ctaLabel: "View Proposal",
+                            ctaUrl: getDefaultStudentDashboardUrl("/student/submit-proposal"),
+                        })
+                    }
                 } catch (_) {
                     // Non-critical — don't fail the main operation
                 }
+            }
+        }
+
+        // If a remark is added (feedback path), email all team members.
+        if (adminBody.remark && proposal.teamMembers && Array.isArray(proposal.teamMembers)) {
+            const members = proposal.teamMembers as unknown as Array<{ email: string }>
+            for (const m of members) {
+                sendNexusEmailNonBlocking({
+                    to: m.email,
+                    subject: "New Proposal Feedback",
+                    heading: "New Feedback From Guide/Admin",
+                    intro: `A new remark was added to your proposal \"${proposal.title}\".`,
+                    blocks: [
+                        { label: "From", value: adminBody.remark.from },
+                        { label: "Role", value: adminBody.remark.fromRole },
+                        { label: "Feedback", value: adminBody.remark.message },
+                    ],
+                    ctaLabel: "View Feedback",
+                    ctaUrl: getDefaultStudentDashboardUrl("/student/feedback"),
+                })
             }
         }
 
@@ -149,15 +193,15 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
         await dbConnect()
         const { id } = await context.params
 
-        // Students can only delete their own pending proposals
+        // Students can only delete their own pending proposals (leader only)
         if (session.user.role === "student") {
-            const existing = await Proposal.findById(id).select("studentId status").lean()
+            const existing = await Proposal.findById(id).select("leaderId status").lean()
             if (!existing) return NextResponse.json({ error: "Proposal not found" }, { status: 404 })
-            if (String(existing.studentId) !== session.user.id) {
-                return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+            if (String(existing.leaderId) !== session.user.id) {
+                return NextResponse.json({ error: "Only the team leader can delete the proposal" }, { status: 403 })
             }
-            if (existing.status !== "pending") {
-                return NextResponse.json({ error: "Only pending proposals can be deleted" }, { status: 403 })
+            if (existing.status !== "pending" && existing.status !== "draft") {
+                return NextResponse.json({ error: "Only pending/draft proposals can be deleted" }, { status: 403 })
             }
         } else if (session.user.role !== "admin") {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })

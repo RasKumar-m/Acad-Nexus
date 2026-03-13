@@ -6,6 +6,7 @@ export interface IUser extends Document {
     email: string
     password: string
     role: "admin" | "student" | "guide"
+    rollNumber?: string
     assignedGuideId?: string | null
     assignedGuideName?: string | null
     department?: string
@@ -51,6 +52,15 @@ const UserSchema = new Schema<IUser>(
             },
             required: [true, "Role is required"],
             default: "student",
+        },
+        rollNumber: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            sparse: true,
+            unique: true,
+            maxlength: [30, "Roll number must be at most 30 characters"],
+            default: null,
         },
         assignedGuideId: {
             type: String,

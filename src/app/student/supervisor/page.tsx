@@ -40,9 +40,12 @@ export default function SupervisorPage() {
             .finally(() => setLoading(false))
     }, [])
 
-    // Get the student's latest proposal
+    // Get the student's latest proposal (check teamMembers array)
     const myProposal: Proposal | undefined = React.useMemo(
-        () => proposals.find((p) => p.studentEmail === user?.email),
+        () => proposals.find((p) =>
+            p.teamMembers?.some((m) => m.email === user?.email) ||
+            p.studentEmail === user?.email
+        ),
         [proposals, user?.email]
     )
 

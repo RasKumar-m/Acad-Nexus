@@ -41,14 +41,26 @@ export async function GET() {
             const completedMilestones = milestones.filter((m) => m.status === "reviewed").length
             const submittedMilestones = milestones.filter((m) => m.status === "submitted").length
             const pendingMilestones = milestones.filter((m) => m.status === "pending").length
-            const studentDept = studentMap.get((p.studentEmail as string).toLowerCase())?.department || "N/A"
+
+            const members = (p.teamMembers as Array<{ name?: string; email?: string; rollNumber?: string }>) || []
+            const teamMemberNames = members.map((m) => m.name || "").join(", ") || (p.studentName as string) || "N/A"
+            const teamMemberEmails = members.map((m) => m.email || "").join(", ") || (p.studentEmail as string) || "N/A"
+            const primaryEmail = members[0]?.email || (p.studentEmail as string) || ""
+            const studentDept = studentMap.get(primaryEmail.toLowerCase())?.department || "N/A"
+
+            // Sum file counts across all team members
+            const teamFileCount = members.length > 0
+                ? members.reduce((sum, m) => sum + (fileCountMap.get((m.email || "").toLowerCase()) || 0), 0)
+                : fileCountMap.get((p.studentEmail as string || "").toLowerCase()) || 0
 
             return {
                 "S.No": idx + 1,
                 "Project Title": p.title,
                 "Description": p.description,
-                "Student Name": p.studentName,
-                "Student Email": p.studentEmail,
+                "Team Leader": p.studentName || (members[0]?.name ?? "N/A"),
+                "Team Members": teamMemberNames,
+                "Team Emails": teamMemberEmails,
+                "Team Size": members.length || 1,
                 "Department": studentDept,
                 "Assigned Guide": p.supervisor || "Not Assigned",
                 "Status": (p.status as string).charAt(0).toUpperCase() + (p.status as string).slice(1),
@@ -57,7 +69,7 @@ export async function GET() {
                 "Completed Milestones": completedMilestones,
                 "Submitted Milestones": submittedMilestones,
                 "Pending Milestones": pendingMilestones,
-                "Files Uploaded": fileCountMap.get((p.studentEmail as string).toLowerCase()) || 0,
+                "Files Uploaded": teamFileCount,
                 "Submitted Date": p.createdAt ? new Date(p.createdAt as string | Date).toLocaleDateString("en-US") : "N/A",
             }
         })
@@ -65,7 +77,13 @@ export async function GET() {
         // ─── Sheet 2: Students Summary ──────────────────────────
         const studentRows = students.map((s, idx) => {
             const email = (s.email as string).toLowerCase()
-            const proposal = proposals.find((p) => (p.studentEmail as string).toLowerCase() === email)
+            // Find proposal where student is a team member, or fall back to legacy studentEmail
+            const proposal = proposals.find((p) => {
+                const members = (p.teamMembers as Array<{ email?: string }>) || []
+                if (members.length > 0) return members.some((m) => (m.email || "").toLowerCase() === email)
+                return (p.studentEmail as string || "").toLowerCase() === email
+            })
+            const teamMembers = proposal ? ((proposal.teamMembers as Array<{ name?: string }>) || []) : []
             return {
                 "S.No": idx + 1,
                 "Student Name": s.name,
@@ -74,6 +92,7 @@ export async function GET() {
                 "Assigned Guide": s.assignedGuideName || proposal?.supervisor || "Not Assigned",
                 "Project Title": proposal?.title || "No Proposal",
                 "Project Status": proposal ? (proposal.status as string).charAt(0).toUpperCase() + (proposal.status as string).slice(1) : "N/A",
+                "Team Size": teamMembers.length || (proposal ? 1 : 0),
                 "Deadline": proposal?.deadline || "Not Set",
                 "Files Uploaded": fileCountMap.get(email) || 0,
             }
@@ -104,12 +123,14 @@ export async function GET() {
                 title?: string; description?: string; dueDate?: string; status?: string;
                 submissionLink?: string; linkType?: string; fileName?: string; submittedAt?: Date | string | null
             }>) || []
+            const members = (p.teamMembers as Array<{ name?: string; email?: string }>) || []
+            const teamNames = members.map((m) => m.name || "").join(", ") || (p.studentName as string) || "N/A"
             for (const m of milestones) {
                 milestoneRows.push({
                     "S.No": mIdx++,
                     "Project Title": p.title as string,
-                    "Student Name": p.studentName as string,
-                    "Student Email": p.studentEmail as string,
+                    "Team Leader": p.studentName as string || "N/A",
+                    "Team Members": teamNames,
                     "Milestone Title": m.title || "",
                     "Milestone Description": m.description || "",
                     "Due Date": m.dueDate || "Not Set",
