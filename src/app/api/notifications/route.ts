@@ -4,7 +4,7 @@ import Notification from "@/models/Notification"
 import User from "@/models/User"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { createNotificationSchema, markAllReadSchema, parseBody } from "@/lib/zod-schemas"
-import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
+import { sendEmail, announcementEmail } from "@/lib/email"
 
 // GET /api/notifications?email=...&unread=true&audience=...&role=...  — list notifications
 export async function GET(req: NextRequest) {
@@ -90,23 +90,28 @@ export async function POST(req: NextRequest) {
             ...(body.postedBy && { postedBy: body.postedBy }),
         })
 
-        // For student/global circulars, send announcement email to all students.
-        if (isCircular && (body.targetAudience === "student" || body.targetAudience === "all")) {
-            const students = await User.find({ role: "student" }).select("email").lean()
-            for (const student of students as Array<{ email?: string }>) {
-                if (!student.email) continue
-                sendNexusEmailNonBlocking({
-                    to: student.email,
-                    subject: `Announcement: ${body.title}`,
-                    heading: body.title,
-                    intro: "A new announcement has been posted by admin/guide.",
-                    blocks: [
-                        { label: "Announcement", value: body.message },
-                        { label: "Audience", value: body.targetAudience || "all" },
-                    ],
-                    ctaLabel: "Open Notifications",
-                    ctaUrl: getDefaultStudentDashboardUrl("/student/notifications"),
-                })
+        // Send email for circulars/announcements
+        if (isCircular) {
+            try {
+                // Determine which users to email
+                const roleFilter: Record<string, unknown> = {}
+                if (body.targetAudience && body.targetAudience !== "all") {
+                    roleFilter.role = body.targetAudience
+                }
+                const users = await User.find(roleFilter).select("email name").lean()
+                await Promise.allSettled(
+                    (users as Array<{ email: string; name?: string }>).map((u) => {
+                        const emailData = announcementEmail(
+                            u.name || "User",
+                            String(body.title),
+                            String(body.message),
+                            body.postedBy || undefined
+                        )
+                        return sendEmail(u.email, emailData.subject, emailData.html)
+                    })
+                )
+            } catch (_) {
+                // Non-critical
             }
         }
 

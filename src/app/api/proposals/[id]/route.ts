@@ -4,7 +4,7 @@ import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { patchProposalStudentSchema, patchProposalAdminSchema, parseBody } from "@/lib/zod-schemas"
-import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
+import { sendEmail, proposalStatusEmail, deadlineEmail } from "@/lib/email"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -136,44 +136,40 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                         )
                     )
 
-                    for (const m of members) {
-                        sendNexusEmailNonBlocking({
-                            to: m.email,
-                            subject: notifTitle,
-                            heading: notifTitle,
-                            intro: `There is a new update on your proposal \"${proposal.title}\".`,
-                            blocks: [
-                                { label: "Project", value: String(proposal.title) },
-                                { label: "Status", value: statusLabel },
-                                { label: "Message", value: notifMessage },
-                            ],
-                            ctaLabel: "View Proposal",
-                            ctaUrl: getDefaultStudentDashboardUrl("/student/submit-proposal"),
+                    // Send email to every team member
+                    await Promise.allSettled(
+                        members.map((m) => {
+                            const email = proposalStatusEmail(
+                                m.name || "Team Member",
+                                String(proposal.title),
+                                adminBody.status!,
+                                adminBody.remark?.message
+                            )
+                            return sendEmail(m.email, email.subject, email.html)
                         })
-                    }
+                    )
                 } catch (_) {
                     // Non-critical — don't fail the main operation
                 }
             }
         }
 
-        // If a remark is added (feedback path), email all team members.
-        if (adminBody.remark && proposal.teamMembers && Array.isArray(proposal.teamMembers)) {
-            const members = proposal.teamMembers as unknown as Array<{ email: string }>
-            for (const m of members) {
-                sendNexusEmailNonBlocking({
-                    to: m.email,
-                    subject: "New Proposal Feedback",
-                    heading: "New Feedback From Guide/Admin",
-                    intro: `A new remark was added to your proposal \"${proposal.title}\".`,
-                    blocks: [
-                        { label: "From", value: adminBody.remark.from },
-                        { label: "Role", value: adminBody.remark.fromRole },
-                        { label: "Feedback", value: adminBody.remark.message },
-                    ],
-                    ctaLabel: "View Feedback",
-                    ctaUrl: getDefaultStudentDashboardUrl("/student/feedback"),
-                })
+        // Send email when a deadline is set or updated
+        if (adminBody.deadline && proposal.teamMembers && Array.isArray(proposal.teamMembers)) {
+            try {
+                const members = proposal.teamMembers as unknown as Array<{ userId: string; email: string; name?: string }>
+                await Promise.allSettled(
+                    members.map((m) => {
+                        const email = deadlineEmail(
+                            m.name || "Team Member",
+                            String(proposal.title),
+                            String(adminBody.deadline)
+                        )
+                        return sendEmail(m.email, email.subject, email.html)
+                    })
+                )
+            } catch (_) {
+                // Non-critical
             }
         }
 

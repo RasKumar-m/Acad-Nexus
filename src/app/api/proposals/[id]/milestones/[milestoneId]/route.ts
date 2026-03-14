@@ -5,6 +5,7 @@ import Notification from "@/models/Notification"
 import User from "@/models/User"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { patchMilestoneSchema, parseBody } from "@/lib/zod-schemas"
+import { sendEmail, milestoneSubmittedEmail, milestoneReviewedEmail } from "@/lib/email"
 
 interface RouteContext {
     params: Promise<{ id: string; milestoneId: string }>
@@ -110,16 +111,26 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         // Notify guide when student submits a milestone
         if (isStudentSubmission && proposal.guideId) {
             try {
-                const guide = await User.findById(proposal.guideId).select("email").lean()
+                const guide = await User.findById(proposal.guideId).select("email name").lean()
                 if (guide) {
+                    const guideDoc = guide as { email?: string; name?: string }
                     await Notification.create({
                         userId: proposal.guideId,
-                        userEmail: (guide as { email?: string }).email,
+                        userEmail: guideDoc.email,
                         type: "assignment",
                         title: "Milestone Submitted",
                         message: `${proposal.studentName} has submitted "${milestoneTitle}" for project "${proposal.title}".`,
                         relatedId: String(proposal._id),
                     })
+
+                    // Send email to guide
+                    const emailData = milestoneSubmittedEmail(
+                        guideDoc.name || "Guide",
+                        String(proposal.studentName),
+                        String(proposal.title),
+                        String(milestoneTitle)
+                    )
+                    await sendEmail(String(guideDoc.email), emailData.subject, emailData.html)
                 }
             } catch (_) { /* non-critical */ }
         }
@@ -139,6 +150,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                             relatedId: String(proposal._id),
                         })
                     )
+                )
+
+                // Send email to every team member
+                await Promise.allSettled(
+                    members.map((m) => {
+                        const emailData = milestoneReviewedEmail(
+                            (m as unknown as { name?: string }).name || "Team Member",
+                            String(proposal.title),
+                            String(milestoneTitle)
+                        )
+                        return sendEmail(m.email, emailData.subject, emailData.html)
+                    })
                 )
             } catch (_) { /* non-critical */ }
         }

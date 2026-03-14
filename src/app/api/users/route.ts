@@ -10,7 +10,6 @@ import {
 } from "@/lib/validation"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { createUserSchema, parseBody } from "@/lib/zod-schemas"
-import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
 
 // GET /api/users?role=student|guide|admin
 // Any authenticated user can list guides; admin required for other roles
@@ -105,24 +104,6 @@ export async function POST(req: NextRequest) {
             expertise: expertise || "",
             maxStudents: role === "guide" ? maxStudents : undefined,
         })
-
-        // Send onboarding email only when an admin registers a student.
-        if (role === "student") {
-            sendNexusEmailNonBlocking({
-                to: email,
-                subject: "Welcome to Acad-Nexus",
-                heading: "Your Student Account Is Ready",
-                intro: "An admin has created your student account in Acad-Nexus. You can now sign in and start working on your project workflow.",
-                blocks: [
-                    { label: "Name", value: name },
-                    { label: "Email", value: email },
-                    { label: "Role", value: "Student" },
-                ],
-                ctaLabel: "Open Login",
-                ctaUrl: getDefaultStudentDashboardUrl("/login"),
-                footerNote: "If this account was created in error, please contact your administrator.",
-            })
-        }
 
         const userObj = user.toObject()
         // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -4,7 +4,7 @@ import Proposal from "@/models/Proposal"
 import Notification from "@/models/Notification"
 import { requireAuth, requireRole } from "@/lib/auth-guard"
 import { createMilestoneSchema, parseBody } from "@/lib/zod-schemas"
-import { getDefaultStudentDashboardUrl, sendNexusEmailNonBlocking } from "@/lib/mailer"
+import { sendEmail, milestoneAssignedEmail } from "@/lib/email"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -119,21 +119,18 @@ export async function POST(req: NextRequest, context: RouteContext) {
                 )
             )
 
-            for (const m of members) {
-                sendNexusEmailNonBlocking({
-                    to: m.email,
-                    subject: "New Milestone Assigned",
-                    heading: "A New Milestone Was Added",
-                    intro: `A guide/admin has added a new milestone to your project "${proposal.title}".`,
-                    blocks: [
-                        { label: "Milestone", value: body.title },
-                        { label: "Due Date", value: body.dueDate },
-                        { label: "Project", value: String(proposal.title) },
-                    ],
-                    ctaLabel: "Open Milestones",
-                    ctaUrl: getDefaultStudentDashboardUrl("/student/milestones"),
+            // Send email to every team member about the new milestone
+            await Promise.allSettled(
+                members.map((m) => {
+                    const email = milestoneAssignedEmail(
+                        (m as unknown as { name?: string }).name || "Team Member",
+                        String(proposal.title),
+                        String(body.title),
+                        String(body.dueDate)
+                    )
+                    return sendEmail((m as unknown as { email: string }).email, email.subject, email.html)
                 })
-            }
+            )
         } catch (_) {
             // Non-critical
         }

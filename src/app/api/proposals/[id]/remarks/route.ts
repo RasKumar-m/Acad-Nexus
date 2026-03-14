@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb"
 import Proposal from "@/models/Proposal"
 import { requireRole } from "@/lib/auth-guard"
 import { createRemarkSchema, parseBody } from "@/lib/zod-schemas"
+import { sendEmail, feedbackEmail } from "@/lib/email"
 
 interface RouteContext {
     params: Promise<{ id: string }>
@@ -39,6 +40,24 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
         if (!proposal) {
             return NextResponse.json({ error: "Proposal not found" }, { status: 404 })
+        }
+
+        // Send feedback email to all team members
+        try {
+            const members = (proposal.teamMembers ?? []) as unknown as Array<{ userId: string; email: string; name?: string }>
+            await Promise.allSettled(
+                members.map((m) => {
+                    const emailData = feedbackEmail(
+                        m.name || "Team Member",
+                        String(proposal.title),
+                        String(body.from),
+                        String(body.message)
+                    )
+                    return sendEmail(m.email, emailData.subject, emailData.html)
+                })
+            )
+        } catch (_) {
+            // Non-critical
         }
 
         return NextResponse.json(proposal)
