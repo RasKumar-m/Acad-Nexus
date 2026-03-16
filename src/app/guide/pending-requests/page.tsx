@@ -34,6 +34,7 @@ import {
     Eye,
     MessageSquare,
     Send,
+    Sparkles,
 } from "lucide-react"
 import { useProposals, type Proposal } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
@@ -63,10 +64,14 @@ export default function PendingRequestsPage() {
     const [searchQuery, setSearchQuery] = React.useState("")
     const [filterStatus, setFilterStatus] = React.useState("all")
 
-    // View dialog
     const [viewOpen, setViewOpen] = React.useState(false)
     const [viewTarget, setViewTarget] = React.useState<Proposal | null>(null)
     const [viewRemarkText, setViewRemarkText] = React.useState("")
+    
+    // AI State for Guide view
+    const [aiLoading, setAiLoading] = React.useState(false)
+    const [aiSummary, setAiSummary] = React.useState<string[]>([])
+    const [aiDupeResult, setAiDupeResult] = React.useState<{ isDuplicate: boolean; similarityScore: number; reasoning: string } | null>(null)
 
     // Confirm dialog state
     const [confirmOpen, setConfirmOpen] = React.useState(false)
@@ -101,6 +106,41 @@ export default function PendingRequestsPage() {
         setViewTarget(proposal)
         setViewRemarkText("")
         setViewOpen(true)
+        
+        // Fetch AI Insights for this proposal
+        fetchAiInsights(proposal)
+    }
+
+    async function fetchAiInsights(proposal: Proposal) {
+        setAiLoading(true)
+        setAiSummary([])
+        setAiDupeResult(null)
+        try {
+            // Run both AI calls in parallel
+            const [sumRes, dupeRes] = await Promise.all([
+                fetch("/api/ai/summarize", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: proposal.title, description: proposal.description })
+                }),
+                fetch("/api/ai/check-duplicates", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: proposal.title, description: proposal.description })
+                })
+            ])
+            
+            if (sumRes.ok) {
+                const data = await sumRes.json()
+                if (data.summary) setAiSummary(data.summary)
+            }
+            if (dupeRes.ok) {
+                const data = await dupeRes.json()
+                setAiDupeResult(data)
+            }
+        } catch {
+            // silent fail for AI
+        } finally {
+            setAiLoading(false)
+        }
     }
 
     function openConfirm(req: Proposal, action: "approved" | "rejected") {
@@ -304,6 +344,53 @@ export default function PendingRequestsPage() {
                                     <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{viewTarget.description}</p>
                                 </div>
                             </div>
+
+                            {/* ─── AI Insights Panel ───────────────────────── */}
+                            <div className="grid gap-1.5 mt-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                                    <Label className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">AI Insights</Label>
+                                </div>
+                                
+                                {aiLoading ? (
+                                    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4 flex items-center gap-3 text-indigo-600">
+                                        <div className="w-4 h-4 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+                                        <p className="text-sm font-medium animate-pulse">Generating summary and checking for duplicates...</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {/* AI Summary */}
+                                        {aiSummary.length > 0 && (
+                                            <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
+                                                <h4 className="text-xs font-bold text-indigo-900 mb-2">Smart Summary</h4>
+                                                <ul className="space-y-1.5 list-disc list-inside text-sm text-indigo-900/80">
+                                                    {aiSummary.map((point, idx) => (
+                                                        <li key={idx} className="leading-relaxed">{point}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                        
+                                        {/* AI Duplicate Warning */}
+                                        {aiDupeResult && aiDupeResult.isDuplicate && (
+                                            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex gap-3">
+                                                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-amber-900">High Similarity Detected ({aiDupeResult.similarityScore}%)</h4>
+                                                    <p className="text-sm text-amber-800 mt-1 leading-relaxed">{aiDupeResult.reasoning}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {!aiLoading && aiSummary.length === 0 && (!aiDupeResult || !aiDupeResult.isDuplicate) && (
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 italic">
+                                                AI insights unavailable for this proposal.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {/* ──────────────────────────────────────────────── */}
 
                             {/* Attached File */}
                             {viewTarget.attachedFileUrl && viewTarget.attachedFileType && (

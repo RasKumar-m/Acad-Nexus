@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
-import { Users, CheckCircle2, Clock, Search, MessageSquare, FolderKanban, CalendarDays, AlertTriangle, Send, Loader2, Trophy } from "lucide-react"
+import { Users, CheckCircle2, Clock, Search, MessageSquare, FolderKanban, CalendarDays, AlertTriangle, Send, Loader2, Trophy, Sparkles, TrendingUp, TrendingDown } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useProposals, type Proposal } from "@/lib/proposal-context"
 import FileCard from "@/components/FileCard"
@@ -41,6 +41,11 @@ export default function AssignedStudentsPage() {
     const [confirmCompleteTarget, setConfirmCompleteTarget] = React.useState<Proposal | null>(null)
     const [completing, setCompleting] = React.useState(false)
     const [completeChecked, setCompleteChecked] = React.useState(false)
+
+    const [analyticsOpen, setAnalyticsOpen] = React.useState(false)
+    const [analyticsTarget, setAnalyticsTarget] = React.useState<Proposal | null>(null)
+    const [aiAnalyticsLoading, setAiAnalyticsLoading] = React.useState(false)
+    const [aiAnalyticsData, setAiAnalyticsData] = React.useState<{ score: number; verdict: string; strengths: string[]; risks: string[] } | null>(null)
 
     // Filter proposals where this guide is assigned
     const myStudents = React.useMemo(
@@ -88,6 +93,34 @@ export default function AssignedStudentsPage() {
             setConfirmCompleteTarget(null)
         } catch (err) { console.error(err) }
         finally { setCompleting(false) }
+    }
+
+    async function handleViewAnalytics(proposal: Proposal) {
+        setAnalyticsTarget(proposal)
+        setAnalyticsOpen(true)
+        setAiAnalyticsLoading(true)
+        setAiAnalyticsData(null)
+
+        try {
+            const res = await fetch("/api/ai/performance-analytics", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    milestones: [], // Can be expanded later to include actual milestones
+                    proposalId: proposal._id,
+                    deadline: proposal.deadline || undefined,
+                    status: proposal.status
+                })
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setAiAnalyticsData(data)
+            }
+        } catch (err) {
+            console.error("Failed to fetch analytics:", err)
+        } finally {
+            setAiAnalyticsLoading(false)
+        }
     }
 
     if (loading) {
@@ -227,17 +260,20 @@ export default function AssignedStudentsPage() {
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-2 pt-1">
-                                        <Button size="sm" variant="outline" className="flex-1 gap-1.5 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800" onClick={() => openFeedback(proposal)}>
+                                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                        <Button size="sm" variant="outline" className="flex-[1_0_auto] gap-1.5 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800" onClick={() => openFeedback(proposal)}>
                                             <MessageSquare className="w-4 h-4" /> Feedback
                                         </Button>
+                                        <Button size="sm" variant="outline" className="flex-[1_0_auto] gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800" onClick={() => handleViewAnalytics(proposal)}>
+                                            <Sparkles className="w-4 h-4" /> Analytics
+                                        </Button>
                                         {proposal.status === "approved" && (
-                                            <Button size="sm" className="flex-1 gap-1.5 bg-violet-600 hover:bg-violet-700 text-white" onClick={() => { setConfirmCompleteTarget(proposal); setCompleteChecked(false); setConfirmCompleteOpen(true) }}>
-                                                <Trophy className="w-4 h-4" /> Mark Complete
+                                            <Button size="sm" className="flex-[1_0_auto] gap-1.5 bg-violet-600 hover:bg-violet-700 text-white" onClick={() => { setConfirmCompleteTarget(proposal); setCompleteChecked(false); setConfirmCompleteOpen(true) }}>
+                                                <Trophy className="w-4 h-4" /> Complete
                                             </Button>
                                         )}
                                         {proposal.status === "completed" && (
-                                            <Badge variant="outline" className="flex-1 justify-center py-1.5 border-violet-300 bg-violet-50 text-violet-700 text-xs font-semibold">
+                                            <Badge variant="outline" className="flex-[1_0_auto] justify-center py-1.5 border-violet-300 bg-violet-50 text-violet-700 text-xs font-semibold">
                                                 <Trophy className="w-3.5 h-3.5 mr-1" /> Completed
                                             </Badge>
                                         )}
@@ -330,6 +366,92 @@ export default function AssignedStudentsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            {/* Performance Analytics Dialog */}
+            <Dialog open={analyticsOpen} onOpenChange={setAnalyticsOpen}>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg flex items-center gap-2"><Sparkles className="w-5 h-5 text-indigo-600" /> AI Performance Analytics</DialogTitle>
+                    </DialogHeader>
+                    {analyticsTarget && (
+                        <div className="py-2">
+                            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4">
+                                <div className="bg-indigo-600 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
+                                    {analyticsTarget.studentName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-sm text-slate-900">{analyticsTarget.studentName}</p>
+                                    <p className="text-xs text-slate-500 truncate">{analyticsTarget.title}</p>
+                                </div>
+                            </div>
+
+                            {aiAnalyticsLoading ? (
+                                <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-6 flex flex-col items-center justify-center gap-3 text-indigo-600 h-48">
+                                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600 flex-shrink-0" />
+                                    <p className="text-sm font-medium animate-pulse text-center">Analyzing project timeline and completion data...</p>
+                                </div>
+                            ) : aiAnalyticsData ? (
+                                <div className="rounded-xl border border-indigo-200 bg-white overflow-hidden shadow-sm">
+                                    <div className={`p-5 flex items-start gap-4 ${aiAnalyticsData.score >= 70 ? 'bg-emerald-50/50 border-b border-emerald-100' : aiAnalyticsData.score >= 40 ? 'bg-amber-50/50 border-b border-amber-100' : 'bg-rose-50/50 border-b border-rose-100'}`}>
+                                        <div className={`p-3 rounded-full shrink-0 ${aiAnalyticsData.score >= 70 ? 'bg-emerald-100 text-emerald-700' : aiAnalyticsData.score >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                                            {aiAnalyticsData.score >= 70 ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
+                                        </div>
+                                        <div className="mt-0.5">
+                                            <h3 className="text-lg font-bold text-slate-900 mb-1">{aiAnalyticsData.verdict}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-xs font-semibold ${aiAnalyticsData.score >= 70 ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : aiAnalyticsData.score >= 40 ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-rose-200 text-rose-700 bg-rose-50'}`}>
+                                                    Score: {aiAnalyticsData.score}/100
+                                                </Badge>
+                                                <span className="text-xs text-slate-500 font-medium tracking-wide uppercase">Velocity Assessment</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                        <div>
+                                            <h4 className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-3">
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Strengths & Progress
+                                            </h4>
+                                            <ul className="space-y-2.5">
+                                                {aiAnalyticsData.strengths.map((s, i) => (
+                                                    <li key={i} className="text-sm text-slate-700 flex items-start gap-2 leading-snug">
+                                                        <span className="text-emerald-500 mt-0.5 shrink-0">•</span> <span>{s}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4 className="flex items-center gap-1.5 text-xs font-bold text-rose-800 uppercase tracking-wider mb-3">
+                                                <AlertTriangle className="w-4 h-4 text-rose-600" /> Risks & Bottlenecks
+                                            </h4>
+                                            <ul className="space-y-2.5">
+                                                {aiAnalyticsData.risks.length > 0 ? (
+                                                    aiAnalyticsData.risks.map((r, i) => (
+                                                        <li key={i} className="text-sm text-slate-700 flex items-start gap-2 leading-snug">
+                                                            <span className="text-rose-500 mt-0.5 shrink-0">•</span> <span>{r}</span>
+                                                        </li>
+                                                    ))
+                                                ) : (
+                                                    <li className="text-sm text-slate-500 italic flex items-center gap-2 pl-2">
+                                                        <CheckCircle2 className="w-4 h-4 text-slate-400" /> No major risks detected.
+                                                    </li>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-500 text-sm">
+                                    Analytics data is temporarily unavailable.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Close Analysis</Button></DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     )
 }

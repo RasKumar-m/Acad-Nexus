@@ -36,6 +36,8 @@ import {
     Lock,
     Plus,
     Crown,
+    Sparkles,
+    AlertCircle,
 } from "lucide-react"
 import { useProposals, type ProposalStatus, type ProposalTeamMember } from "@/lib/proposal-context"
 import { useAuth } from "@/lib/auth-context"
@@ -101,6 +103,16 @@ export default function SubmitProposalPage() {
     const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false)
     const [successOpen, setSuccessOpen] = React.useState(false)
     const [codeCopied, setCodeCopied] = React.useState(false)
+
+    // AI Feature State
+    const [aiCheckingDupes, setAiCheckingDupes] = React.useState(false)
+    const [aiDupeResult, setAiDupeResult] = React.useState<{ isDuplicate: boolean; similarityScore: number; reasoning: string } | null>(null)
+    const [aiScoring, setAiScoring] = React.useState(false)
+    const [aiScoreResult, setAiScoreResult] = React.useState<{ score: number; clarity: number; feasibility: number; scope: number; feedback: string } | null>(null)
+    const [aiSuggesting, setAiSuggesting] = React.useState(false)
+    const [aiSuggestions, setAiSuggestions] = React.useState<Array<{ title: string; description: string; difficulty: string; techStack: string[] }>>([])
+    const [showAiModal, setShowAiModal] = React.useState(false)
+    const [aiContext, setAiContext] = React.useState("")
 
     // Leave team confirmation
     const [leaveOpen, setLeaveOpen] = React.useState(false)
@@ -255,6 +267,75 @@ export default function SubmitProposalPage() {
         navigator.clipboard.writeText(team.teamCode)
         setCodeCopied(true)
         setTimeout(() => setCodeCopied(false), 2000)
+    }
+
+    // ── AI Handlers ──────────────────────────────────────────────────
+    async function handleCheckDuplicates() {
+        if (title.trim().length < 5 || description.trim().length < 20) return
+        setAiCheckingDupes(true)
+        setAiScoring(true)
+        setAiDupeResult(null)
+        setAiScoreResult(null)
+        try {
+            const [dupeRes, scoreRes] = await Promise.all([
+                fetch("/api/ai/check-duplicates", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: title.trim(), description: description.trim() })
+                }),
+                fetch("/api/ai/score-proposal", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: title.trim(), description: description.trim() })
+                })
+            ])
+            
+            if (dupeRes.ok) {
+                const data = await dupeRes.json()
+                setAiDupeResult(data)
+            } else {
+                console.error("Duplicate Check Error:", await dupeRes.text())
+            }
+
+            if (scoreRes.ok) {
+                const data = await scoreRes.json()
+                setAiScoreResult(data)
+            } else {
+                console.error("Score Error:", await scoreRes.text())
+            }
+        } catch (err) {
+            console.error("AI Feature Error:", err)
+        } finally {
+            setAiCheckingDupes(false)
+            setAiScoring(false)
+        }
+    }
+
+    async function handleGetAiSuggestions() {
+        if (!aiContext.trim()) return
+        setAiSuggesting(true)
+        try {
+            const res = await fetch("/api/ai/suggest-projects", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ context: aiContext.trim() })
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setAiSuggestions(data.suggestions || [])
+            }
+        } catch {
+            // silent fail
+        } finally {
+            setAiSuggesting(false)
+        }
+    }
+
+    function useAiSuggestion(suggestion: { title: string; description: string }) {
+        setTitle(suggestion.title)
+        setDescription(suggestion.description)
+        setShowAiModal(false)
+        setAiDupeResult(null) // reset dupes check
     }
 
     // ── Edit / Delete handlers ──────────────────────────────────────
@@ -519,9 +600,20 @@ export default function SubmitProposalPage() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="project-desc" className="font-semibold text-sm text-slate-700">
-                                        Project Description
-                                    </Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="project-desc" className="font-semibold text-sm text-slate-700">
+                                            Project Description
+                                        </Label>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={() => setShowAiModal(true)}
+                                            className="h-7 text-xs gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                        >
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                            Get AI Suggestions
+                                        </Button>
+                                    </div>
                                     <textarea
                                         id="project-desc"
                                         rows={6}
@@ -529,11 +621,66 @@ export default function SubmitProposalPage() {
                                         className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
+                                        onBlur={handleCheckDuplicates}
                                     />
-                                    {description.length > 0 && description.length < 20 && (
-                                        <p className="text-xs text-amber-600">
-                                            Description should be at least 20 characters ({20 - description.length} more needed)
-                                        </p>
+                                    <div className="flex items-center justify-between mt-1">
+                                        {description.length > 0 && description.length < 20 ? (
+                                            <p className="text-xs text-amber-600">
+                                                Description should be at least 20 characters ({20 - description.length} more needed)
+                                            </p>
+                                        ) : <div />}
+                                        
+                                        {/* AI Indicator */}
+                                        {(aiCheckingDupes || aiScoring) && (
+                                            <p className="text-xs flex items-center gap-1.5 text-indigo-500 font-medium animate-pulse">
+                                                <Sparkles className="w-3 h-3" /> Analyzing proposal...
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* AI Duplicate Result Banner */}
+                                    {aiDupeResult && aiDupeResult.isDuplicate && (
+                                        <div className="mt-2 p-3 rounded-lg border border-amber-200 bg-amber-50 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+                                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-amber-800">High Similarity Detected ({aiDupeResult.similarityScore}%)</h4>
+                                                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                                                    {aiDupeResult.reasoning}
+                                                </p>
+                                                <p className="text-xs text-amber-800 font-medium mt-1.5">
+                                                    Consider revising your idea to make it more unique before submitting to avoid rejection.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* AI Quality Score Result Banner */}
+                                    {aiScoreResult && (
+                                        <div className="mt-2 p-4 rounded-lg border border-indigo-100 bg-indigo-50/50 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                                                <h4 className="text-sm font-bold text-indigo-900">AI Quality Score: {aiScoreResult.score}/10</h4>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                                                    <p className="text-[10px] uppercase text-slate-500 font-semibold mb-1">Clarity</p>
+                                                    <p className="text-sm font-bold text-indigo-700">{aiScoreResult.clarity}/10</p>
+                                                </div>
+                                                <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                                                    <p className="text-[10px] uppercase text-slate-500 font-semibold mb-1">Feasibility</p>
+                                                    <p className="text-sm font-bold text-indigo-700">{aiScoreResult.feasibility}/10</p>
+                                                </div>
+                                                <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                                                    <p className="text-[10px] uppercase text-slate-500 font-semibold mb-1">Scope</p>
+                                                    <p className="text-sm font-bold text-indigo-700">{aiScoreResult.scope}/10</p>
+                                                </div>
+                                            </div>
+
+                                            <p className="text-xs text-indigo-800 leading-relaxed bg-white/60 p-2 rounded">
+                                                <strong>Feedback:</strong> {aiScoreResult.feedback}
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
 
@@ -976,6 +1123,87 @@ export default function SubmitProposalPage() {
                             <Trash2 className="w-4 h-4" /> Delete
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ─── AI Project Idea Suggestions Modal ────────────── */}
+            <Dialog open={showAiModal} onOpenChange={setShowAiModal}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col bg-slate-50">
+                    <DialogHeader className="px-1 shrink-0">
+                        <DialogTitle className="text-xl flex items-center gap-2 text-slate-800">
+                            <Sparkles className="w-5 h-5 text-indigo-600" />
+                            AI Project Brainstormer
+                        </DialogTitle>
+                        <p className="text-sm text-slate-500 mt-1">Tell me about your interests, skills, or department, and I&apos;ll suggest 5 unique projects.</p>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto pr-2 py-2 space-y-4">
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="e.g. I know React and Python. I want to build something for healthcare..."
+                                className="bg-white border-indigo-200 focus-visible:ring-indigo-500"
+                                value={aiContext}
+                                onChange={(e) => setAiContext(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleGetAiSuggestions() }}
+                            />
+                            <Button 
+                                onClick={handleGetAiSuggestions}
+                                disabled={aiSuggesting || !aiContext.trim()}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 gap-1.5"
+                            >
+                                {aiSuggesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                Search
+                            </Button>
+                        </div>
+
+                        {aiSuggesting && (
+                            <div className="flex flex-col items-center justify-center py-12 text-indigo-500 space-y-3">
+                                <Loader2 className="w-8 h-8 animate-spin" />
+                                <p className="text-sm font-medium animate-pulse">Brainstorming unique ideas...</p>
+                            </div>
+                        )}
+
+                        {!aiSuggesting && aiSuggestions.length > 0 && (
+                            <div className="space-y-3 mt-4">
+                                {aiSuggestions.map((sug, i) => (
+                                    <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-indigo-300 transition-colors group">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">{sug.title}</h4>
+                                                <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">{sug.description}</p>
+                                                
+                                                <div className="flex flex-wrap items-center gap-2 mt-3">
+                                                    <Badge variant="secondary" className="bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                                                        {sug.difficulty}
+                                                    </Badge>
+                                                    {sug.techStack.map(tech => (
+                                                        <span key={tech} className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-medium">
+                                                            {tech}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm"
+                                                onClick={() => useAiSuggestion(sug)}
+                                                className="shrink-0 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                                            >
+                                                Use Idea
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {!aiSuggesting && aiSuggestions.length === 0 && !aiContext && (
+                            <div className="text-center py-10 px-4">
+                                <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                                <p className="text-sm text-slate-500">Enter your interests above to get AI-generated project ideas.</p>
+                            </div>
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

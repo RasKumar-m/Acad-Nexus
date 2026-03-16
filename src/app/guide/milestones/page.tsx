@@ -42,6 +42,8 @@ import {
     LayoutGrid,
     TableProperties,
     Link2,
+    Sparkles,
+    Wand2,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useProposals } from "@/lib/proposal-context"
@@ -99,6 +101,12 @@ export default function GuideMilestonesPage() {
     const [formDueDate, setFormDueDate] = React.useState("")
     const [creating, setCreating] = React.useState(false)
     const [formError, setFormError] = React.useState("")
+
+    // AI Suggestions
+    const [aiSuggesting, setAiSuggesting] = React.useState(false)
+    const [aiSuggestionsOpen, setAiSuggestionsOpen] = React.useState(false)
+    const [aiSuggestedMilestones, setAiSuggestedMilestones] = React.useState<{ title: string; description: string; recommendedDaysFromNow: number }[]>([])
+    const [aiSelectedIndices, setAiSelectedIndices] = React.useState<Set<number>>(new Set())
 
     // Delete dialog
     const [deleteOpen, setDeleteOpen] = React.useState(false)
@@ -199,6 +207,7 @@ export default function GuideMilestonesPage() {
 
     // ── Mark as Reviewed ────────────────────────────────────────────
     async function handleMarkReviewed(proposalId: string, milestoneId: string) {
+        // ...
         const res = await fetch(`/api/proposals/${proposalId}/milestones/${milestoneId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -207,6 +216,94 @@ export default function GuideMilestonesPage() {
         if (res.ok) {
             const updated: MilestoneItem[] = await res.json()
             setMilestones((prev) => ({ ...prev, [proposalId]: updated }))
+        }
+    }
+
+    // ── AI Milestone Recommender ────────────────────────────────────
+    async function handleSuggestMilestones() {
+        if (!formProposalId) {
+            setFormError("Please select a student/project first to get suggestions.")
+            return
+        }
+        setFormError("")
+        setAiSuggesting(true)
+
+        const selectedProposal = myProposals.find(p => p._id === formProposalId)
+        if (!selectedProposal) {
+            setAiSuggesting(false)
+            return
+        }
+
+        try {
+            const res = await fetch("/api/ai/suggest-milestones", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: selectedProposal.title,
+                    description: selectedProposal.description
+                })
+            })
+
+            if (res.ok) {
+                const data = await res.json()
+                if (data.milestones && data.milestones.length > 0) {
+                    setAiSuggestedMilestones(data.milestones)
+                    setAiSelectedIndices(new Set(data.milestones.map((_: any, i: number) => i)))
+                    setAiSuggestionsOpen(true)
+                } else {
+                    setFormError("AI couldn't generate milestones for this project.")
+                }
+            } else {
+                setFormError("Failed to fetch AI suggestions.")
+            }
+        } catch (err) {
+            console.error(err)
+            setFormError("Network error while fetching suggestions.")
+        } finally {
+            setAiSuggesting(false)
+        }
+    }
+
+    async function handleAddSuggestedMilestones() {
+        if (!formProposalId || aiSelectedIndices.size === 0) return
+        
+        setCreating(true)
+        setAiSuggestionsOpen(false)
+        let lastUpdated: MilestoneItem[] = []
+
+        try {
+            // Add selected milestones sequentially
+            for (const index of Array.from(aiSelectedIndices)) {
+                const ms = aiSuggestedMilestones[index]
+                
+                // Calculate due date based on recommendedDaysFromNow
+                const dueDateObj = new Date()
+                dueDateObj.setDate(dueDateObj.getDate() + ms.recommendedDaysFromNow)
+                const dueDateStr = dueDateObj.toISOString().split('T')[0]
+
+                const res = await fetch(`/api/proposals/${formProposalId}/milestones`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: ms.title,
+                        description: ms.description,
+                        dueDate: dueDateStr
+                    })
+                })
+                
+                if (res.ok) {
+                    lastUpdated = await res.json()
+                }
+            }
+            
+            if (lastUpdated.length > 0) {
+                setMilestones((prev) => ({ ...prev, [formProposalId]: lastUpdated }))
+            }
+        } catch (err) {
+            console.error(err)
+        } finally {
+            setCreating(false)
+            setAiSelectedIndices(new Set())
         }
     }
 
@@ -363,11 +460,22 @@ export default function GuideMilestonesPage() {
 
                     {/* Create form below the board */}
                     <Card className="shadow-sm border-slate-100 bg-white max-w-lg">
-                        <CardHeader className="pb-3">
+                        <CardHeader className="pb-3 flex flex-row items-center justify-between">
                             <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2 text-slate-800">
                                 <Plus className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                                 <span>New Milestone</span>
                             </CardTitle>
+                            
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleSuggestMilestones}
+                                disabled={aiSuggesting || !formProposalId}
+                                className="h-8 gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 text-xs px-2.5"
+                            >
+                                {aiSuggesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                Auto-Suggest
+                            </Button>
                         </CardHeader>
                         <CardContent className="px-4 sm:px-6 pb-6">
                             {myProposals.length === 0 && (
@@ -425,11 +533,22 @@ export default function GuideMilestonesPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 {/* ─── Create Milestone Form ───────────────────────── */}
                 <Card className="shadow-sm border-slate-100 bg-white lg:col-span-1">
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
                         <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2 text-slate-800">
                             <Plus className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                             <span>New Milestone</span>
                         </CardTitle>
+                        
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleSuggestMilestones}
+                            disabled={aiSuggesting || !formProposalId}
+                            className="h-8 gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 text-xs px-2.5"
+                        >
+                            {aiSuggesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                            Auto-Suggest
+                        </Button>
                     </CardHeader>
                     <CardContent className="px-4 sm:px-6 pb-6">
                         {myProposals.length === 0 && (
@@ -643,6 +762,76 @@ export default function GuideMilestonesPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ─── AI Suggestions Dialog ─────────────────────────────── */}
+            <Dialog open={aiSuggestionsOpen} onOpenChange={setAiSuggestionsOpen}>
+                <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-indigo-900 border-b border-indigo-100 pb-3">
+                            <Wand2 className="w-5 h-5 text-indigo-500" />
+                            AI Suggested Milestones
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <p className="text-sm text-slate-600 mb-4 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
+                            Based on the project description, Gemini has generated the following recommended delivery plan. Select the milestones you want to assign to the student.
+                        </p>
+                        
+                        <div className="space-y-3">
+                            {aiSuggestedMilestones.map((ms, index) => (
+                                <div 
+                                    key={index}
+                                    className={`p-3 rounded-lg border transition-colors cursor-pointer flex gap-3 ${
+                                        aiSelectedIndices.has(index) 
+                                            ? "border-indigo-500 bg-indigo-50" 
+                                            : "border-slate-200 bg-white hover:border-slate-300"
+                                    }`}
+                                    onClick={() => {
+                                        setAiSelectedIndices(prev => {
+                                            const next = new Set(prev)
+                                            if (next.has(index)) next.delete(index)
+                                            else next.add(index)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <div className="pt-0.5">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 pointer-events-none"
+                                            checked={aiSelectedIndices.has(index)}
+                                            readOnly
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start gap-2 mb-1">
+                                            <h4 className="font-semibold text-sm text-slate-900">{ms.title}</h4>
+                                            <Badge variant="outline" className="text-[10px] whitespace-nowrap bg-white">
+                                                +{ms.recommendedDaysFromNow} Days
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-slate-600 leading-relaxed">{ms.description}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0 mt-2">
+                        <DialogClose asChild>
+                            <Button variant="outline" className="text-xs sm:text-sm">Cancel</Button>
+                        </DialogClose>
+                        <Button 
+                            className="text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+                            onClick={handleAddSuggestedMilestones}
+                            disabled={aiSelectedIndices.size === 0 || creating}
+                        >
+                            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                            Add ({aiSelectedIndices.size}) Milestones
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     )
 }
